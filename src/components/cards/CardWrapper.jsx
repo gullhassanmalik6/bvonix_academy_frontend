@@ -18,6 +18,7 @@ export default function CardWrapper({
   layout = 'horizontal',
   className = '',
   generateQr = true,
+  fitContent = false,
 }) {
   const qrRef = useRef(null);
   const [qrDataUrl, setQrDataUrl] = useState(null);
@@ -92,21 +93,23 @@ export default function CardWrapper({
       <div
         className="card-preview-spacer flex-shrink-0"
         style={{
-          width: `${outerWidthMm}mm`,
-          height: `${outerHeightMm}mm`,
+          width: fitContent ? 'max-content' : `${outerWidthMm}mm`,
+          height: fitContent ? 'auto' : `${outerHeightMm}mm`,
           position: 'relative',
         }}
       >
         <div
-          className={`card-preview-inner absolute top-0 left-0 ${
-            isHorizontal ? 'flex flex-row items-start' : 'flex flex-col items-center'
-          }`}
+          className={`card-preview-inner ${
+            fitContent ? 'relative' : 'absolute top-0 left-0'
+          } ${isHorizontal ? 'flex flex-row items-start' : 'flex flex-col items-center'}`}
           style={{
             gap: `${GAP_MM}mm`,
-            width: `${innerWidthMm}mm`,
-            height: `${innerHeightMm}mm`,
-            transform: `scale(${scale})`,
+            width: fitContent ? 'max-content' : `${innerWidthMm}mm`,
+            height: fitContent ? 'auto' : `${innerHeightMm}mm`,
+            transform: fitContent ? 'none' : `scale(${scale})`,
             transformOrigin: 'top left',
+            padding: fitContent ? '6mm' : undefined,
+            background: fitContent ? '#f1f5f9' : undefined,
           }}
         >
           <div className="flex flex-col items-center flex-shrink-0">

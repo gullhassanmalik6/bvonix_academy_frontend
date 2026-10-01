@@ -60,7 +60,12 @@ export default function FrontCard({ data, className = '' }) {
             }}
           >
             {d.profileImageUrl ? (
-              <img src={d.profileImageUrl} alt="" className="w-full h-full object-cover" />
+              <img
+                src={d.profileImageUrl}
+                alt=""
+                crossOrigin="anonymous"
+                className="w-full h-full object-cover"
+              />
             ) : (
               <div className="w-full h-full min-h-[32mm] flex items-center justify-center text-[7px] text-slate-400 font-medium">
                 Photo

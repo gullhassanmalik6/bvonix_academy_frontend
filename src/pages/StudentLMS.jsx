@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { lmsService } from '../services/lmsService';
+import { downloadCardPreviewPdf, fetchPreviewCardData, openCardPreviewPdf } from '../utils/cardPreviewPdf';
 import { courseService } from '../services/courseService';
 import { siteSettingsService } from '../services/siteSettingsService';
 import { uploadService } from '../services/uploadService';
@@ -1635,7 +1636,8 @@ const EnrollmentsTab = ({ enrollments, courses }) => {
   const handleViewCard = async (enrollmentId) => {
     try {
       setCardActionLoading(`${enrollmentId}-view`);
-      await lmsService.viewEnrollmentCard(enrollmentId);
+      const cardData = await fetchPreviewCardData(enrollmentId);
+      await openCardPreviewPdf(cardData);
     } catch (err) {
       toast.error(
         err.message || err.response?.data?.detail || err.response?.data?.message || 'Failed to view enrollment card.'
@@ -1648,9 +1650,14 @@ const EnrollmentsTab = ({ enrollments, courses }) => {
   const handleDownloadCard = async (enrollmentId) => {
     try {
       setCardActionLoading(`${enrollmentId}-download`);
-      await lmsService.downloadEnrollmentCard(enrollmentId);
+      const cardData = await fetchPreviewCardData(enrollmentId);
+      await downloadCardPreviewPdf(
+        cardData,
+        `enrollment_card_${cardData.studentId || enrollmentId}.pdf`
+      );
+      toast.success('Card PDF downloaded');
     } catch (err) {
-      toast.error(await getApiErrorMessage(err, 'Failed to download enrollment card.'));
+      toast.error(err?.message || (await getApiErrorMessage(err, 'Failed to download enrollment card.')));
     } finally {
       setCardActionLoading(null);
     }
