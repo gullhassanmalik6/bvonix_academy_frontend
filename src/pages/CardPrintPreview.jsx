@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import CardWrapper from '../components/cards/CardWrapper';
 import Button from '../components/common/Button';
 import { cardService } from '../services/cardService';
+import { downloadCardPreviewPdf } from '../utils/cardPreviewPdf';
 import { getApiErrorMessage } from '../services/api';
 import { CARD_PREVIEW_SCALE, defaultCardData } from '../components/cards/cardTheme';
 import { useToast } from '../context/ToastContext';
@@ -80,21 +81,19 @@ export default function CardPrintPreview() {
   }, []);
 
   const handleDownloadPdf = useCallback(async () => {
-    if (!enrollmentId) {
-      showToast('Enrollment ID required for PDF download', 'error');
-      return;
-    }
     try {
       setDownloading(true);
-      const blob = await cardService.downloadEnrollmentCard(enrollmentId);
-      cardService.downloadBlob(blob, `enrollment_card_${cardData.studentId || enrollmentId}.pdf`);
+      await downloadCardPreviewPdf(
+        cardData,
+        `enrollment_card_${cardData.studentId || enrollmentId || 'preview'}.pdf`
+      );
       showToast('Card PDF downloaded', 'success');
     } catch (err) {
-      showToast(await getApiErrorMessage(err, 'PDF download failed'), 'error');
+      showToast(err?.message || (await getApiErrorMessage(err, 'PDF download failed')), 'error');
     } finally {
       setDownloading(false);
     }
-  }, [enrollmentId, cardData.studentId, showToast]);
+  }, [cardData, enrollmentId, showToast]);
 
   return (
     <div className="min-h-screen bg-slate-100">

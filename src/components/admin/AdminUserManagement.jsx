@@ -8,6 +8,7 @@ const AdminUserManagement = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [editingUser, setEditingUser] = useState(null);
+  const [copiedId, setCopiedId] = useState(null);
   const [formData, setFormData] = useState({
     email: '',
     full_name: '',
@@ -63,6 +64,16 @@ const AdminUserManagement = () => {
       loadUsers();
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to delete user');
+    }
+  };
+
+  const copyUserId = async (userId) => {
+    try {
+      await navigator.clipboard.writeText(userId);
+      setCopiedId(userId);
+      window.setTimeout(() => setCopiedId((current) => (current === userId ? null : current)), 1500);
+    } catch {
+      setError('Could not copy the user ID');
     }
   };
 
@@ -186,6 +197,17 @@ const AdminUserManagement = () => {
                     )}
                   </div>
                   <p className="text-gray-600 text-sm">{user.email}</p>
+                  <p className="mt-1 flex flex-wrap items-center gap-2 text-xs text-gray-500">
+                    <span className="font-medium text-gray-700">User ID:</span>
+                    <span className="font-mono break-all">{user.id}</span>
+                    <button
+                      type="button"
+                      onClick={() => copyUserId(user.id)}
+                      className="text-blue-600 hover:text-blue-800"
+                    >
+                      {copiedId === user.id ? 'Copied' : 'Copy'}
+                    </button>
+                  </p>
                   <p className="text-gray-500 text-xs mt-1">
                     Joined: {new Date(user.created_at).toLocaleDateString()}
                   </p>

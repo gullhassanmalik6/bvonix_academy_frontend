@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { adminService } from '../../services/adminService';
-import { cardService } from '../../services/cardService';
+import { downloadCardPreviewPdf, fetchPreviewCardData } from '../../utils/cardPreviewPdf';
 import { courseService } from '../../services/courseService';
 import { useToast } from '../../context/ToastContext';
 import { getApiErrorMessage, getFileUrl } from '../../services/api';
@@ -332,14 +332,14 @@ const AdminEnrollmentManagement = () => {
                           <Button
                             onClick={async () => {
                               try {
-                                const blob = await cardService.downloadEnrollmentCard(enrollment.id);
-                                cardService.downloadBlob(
-                                  blob,
-                                  `enrollment_card_${enrollment.enrollment_card_number || enrollment.id}.pdf`
+                                const cardData = await fetchPreviewCardData(enrollment.id);
+                                await downloadCardPreviewPdf(
+                                  cardData,
+                                  `enrollment_card_${cardData.studentId || enrollment.enrollment_card_number || enrollment.id}.pdf`
                                 );
                                 toast.success('Card PDF downloaded');
                               } catch (err) {
-                                toast.error(await getApiErrorMessage(err, 'Download failed'));
+                                toast.error(err?.message || (await getApiErrorMessage(err, 'Download failed')));
                               }
                             }}
                             className="bg-blue-500 hover:bg-blue-600 text-sm whitespace-nowrap"

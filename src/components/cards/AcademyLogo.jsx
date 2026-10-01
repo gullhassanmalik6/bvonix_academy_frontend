@@ -59,6 +59,7 @@ export default function AcademyLogo({ variant = 'dark', className = '', academyN
         src={src}
         alt=""
         role="presentation"
+        crossOrigin="anonymous"
         onError={handleError}
         className="block mx-auto object-contain"
         style={{
