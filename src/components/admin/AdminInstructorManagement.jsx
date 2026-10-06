@@ -1,12 +1,15 @@
 import { useState, useEffect } from 'react';
 import { adminService } from '../../services/adminService';
+import { interpretApiError } from '../../services/api';
 import Button from '../common/Button';
 import Card from '../common/Card';
+import EmptyState from '../common/EmptyState';
+import { DataState, useCollectionView } from '../common/DataState';
 
 const AdminInstructorManagement = () => {
   const [instructors, setInstructors] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const listView = useCollectionView();
+  const [actionError, setActionError] = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [editingInstructor, setEditingInstructor] = useState(null);
   const [formData, setFormData] = useState({
@@ -21,15 +24,15 @@ const AdminInstructorManagement = () => {
   }, []);
 
   const loadInstructors = async () => {
+    listView.start();
     try {
-      setLoading(true);
       const response = await adminService.getInstructors(0, 100);
-      setInstructors(response.items || []);
-      setError(null);
+      const items = response.items || [];
+      setInstructors(items);
+      listView.succeed(items);
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to load instructors');
-    } finally {
-      setLoading(false);
+      setInstructors([]);
+      await listView.fail(err, 'Failed to load instructors');
     }
   };
 
@@ -46,7 +49,8 @@ const AdminInstructorManagement = () => {
       resetForm();
       loadInstructors();
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to save instructor');
+      const failure = await interpretApiError(err, 'Failed to save instructor');
+      setActionError(failure.kind === 'denied' ? `Permission denied. ${failure.message}` : failure.message);
     }
   };
 
@@ -69,7 +73,8 @@ const AdminInstructorManagement = () => {
       await adminService.deleteInstructor(instructorId);
       loadInstructors();
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to delete instructor');
+      const failure = await interpretApiError(err, 'Failed to delete instructor');
+      setActionError(failure.kind === 'denied' ? `Permission denied. ${failure.message}` : failure.message);
     }
   };
 
@@ -82,10 +87,6 @@ const AdminInstructorManagement = () => {
     });
   };
 
-  if (loading) {
-    return <div className="text-center py-8">Loading instructors...</div>;
-  }
-
   return (
     <div>
       <div className="flex justify-between items-center mb-6">
@@ -95,9 +96,9 @@ const AdminInstructorManagement = () => {
         </Button>
       </div>
 
-      {error && (
-        <div className="mb-4 p-4 bg-red-50 border border-red-200 text-red-700 rounded">
-          {error}
+      {actionError && (
+        <div className="mb-4 p-4 bg-red-50 border border-red-200 text-red-700 rounded" role="alert">
+          {actionError}
         </div>
       )}
 
@@ -171,13 +172,21 @@ const AdminInstructorManagement = () => {
         </Card>
       )}
 
+      <DataState
+        status={listView.status}
+        message={listView.message}
+        onRetry={loadInstructors}
+        loading={<div className="text-center py-8">Loading instructors...</div>}
+        empty={(
+          <EmptyState
+            icon="students"
+            title="No instructor profiles yet"
+            description="Add an instructor profile and link it to a user account before assigning courses."
+          />
+        )}
+      >
       <div className="grid gap-4">
-        {instructors.length === 0 ? (
-          <Card>
-            <p className="text-center text-gray-500 py-8">No instructors found</p>
-          </Card>
-        ) : (
-          instructors.map((instructor) => (
+          {instructors.map((instructor) => (
             <Card key={instructor.id}>
               <div className="flex justify-between items-start">
                 <div className="flex-1">
@@ -212,9 +221,9 @@ const AdminInstructorManagement = () => {
                 </div>
               </div>
             </Card>
-          ))
-        )}
+          ))}
       </div>
+      </DataState>
     </div>
   );
 };

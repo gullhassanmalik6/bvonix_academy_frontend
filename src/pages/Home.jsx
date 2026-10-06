@@ -23,30 +23,33 @@ const Home = () => {
       <SubjectsSection />
       <TestimonialsSection />
 
-      <section className="py-16 bg-[#0A1628] text-white">
-        <div className="container mx-auto px-4 text-center">
-          <p className="text-primary-400 font-bold uppercase tracking-wider text-sm mb-3">
-            Admissions Are Open
-          </p>
-          <h2 className="text-3xl font-bold mb-4">Ready to Start Your Tech Career?</h2>
-          <p className="text-white/80 mb-2 max-w-2xl mx-auto">
-            Join Bvonix Academy — practical, industry-ready education with internship, job guidance, and earning opportunities.
-          </p>
-          <p className="text-primary-300 font-semibold mb-8">Starting From 1st Jan 2026</p>
-          <div className="flex flex-wrap justify-center items-center gap-4">
-            <EnrollButton
-              to={isAuthenticated ? '/courses' : '/register'}
-              text={isAuthenticated ? 'Browse Courses' : 'Enroll Now'}
-              icon={isAuthenticated ? 'arrow' : 'zap'}
-              size="md"
-            />
-            <a
-              href="tel:03081166897"
-              className="inline-flex items-center gap-2 px-6 py-2.5 rounded-lg border border-white/30 hover:bg-white/10 transition-colors"
-            >
-              <FiPhone />
-              0308-1166897
-            </a>
+      <section className="py-16 bg-white">
+        <div className="container mx-auto px-4">
+          <div className="cta-depth relative mx-auto max-w-4xl overflow-hidden rounded-3xl border border-white/10 bg-[#0A1628] px-6 py-14 text-center text-white shadow-[0_18px_40px_rgba(10,22,40,0.22),inset_0_1px_0_rgba(255,255,255,0.12)]">
+            <span className="pointer-events-none absolute inset-x-10 top-0 h-px bg-white/30" />
+            <p className="text-primary-400 font-bold uppercase tracking-wider text-sm mb-3">
+              Admissions Are Open
+            </p>
+            <h2 className="text-3xl font-bold mb-4">Ready to Start Your Tech Career?</h2>
+            <p className="text-white/80 mb-2 max-w-2xl mx-auto">
+              Join Bvonix Academy — practical, industry-ready education with internship, job guidance, and earning opportunities.
+            </p>
+            <p className="text-primary-300 font-semibold mb-8">Starting From 1st Jan 2026</p>
+            <div className="flex flex-wrap justify-center items-center gap-4">
+              <EnrollButton
+                to={isAuthenticated ? '/courses' : '/register'}
+                text={isAuthenticated ? 'Browse Courses' : 'Enroll Now'}
+                icon={isAuthenticated ? 'arrow' : 'zap'}
+                size="md"
+              />
+              <a
+                href="tel:03081166897"
+                className="inline-flex items-center gap-2 px-6 py-2.5 rounded-lg border border-white/30 hover:bg-white/10 transition-colors"
+              >
+                <FiPhone />
+                0308-1166897
+              </a>
+            </div>
           </div>
         </div>
       </section>

@@ -3,13 +3,14 @@ import { Link, useParams } from 'react-router-dom';
 import { FiCheckCircle, FiXCircle, FiShield } from 'react-icons/fi';
 import Card from '../components/common/Card';
 import { cardService } from '../services/cardService';
-import { getApiErrorMessage } from '../services/api';
+import { interpretApiError } from '../services/api';
+import { DataState } from '../components/common/DataState';
 
 export default function VerifyCard() {
   const { cardNumber } = useParams();
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [failure, setFailure] = useState(null);
 
   useEffect(() => {
     if (!cardNumber) return;
@@ -21,7 +22,7 @@ export default function VerifyCard() {
         if (!cancelled) setResult(data);
       } catch (err) {
         if (!cancelled) {
-          setError(await getApiErrorMessage(err, 'Verification failed'));
+          setFailure(await interpretApiError(err, 'Verification failed'));
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -45,11 +46,8 @@ export default function VerifyCard() {
 
           {loading && <p className="text-slate-600">Verifying…</p>}
 
-          {error && (
-            <div className="text-red-600 flex items-center justify-center gap-2">
-              <FiXCircle className="w-5 h-5" />
-              <span>{error}</span>
-            </div>
+          {failure && (
+            <DataState status={failure.kind === 'denied' ? 'denied' : 'error'} message={failure.message} />
           )}
 
           {!loading && result && (

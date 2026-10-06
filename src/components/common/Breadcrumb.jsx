@@ -26,7 +26,7 @@ const Breadcrumb = ({ items = [], customLabels = {} }) => {
       // Map route segments to readable labels
       const labelMap = {
         'dashboard': 'Dashboard',
-        'lms': 'My LMS',
+        'lms': 'My Learning',
         'course': 'Course',
         'admin': 'Admin Dashboard',
         'courses': 'Courses',

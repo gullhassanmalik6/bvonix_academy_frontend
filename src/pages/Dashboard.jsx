@@ -10,10 +10,13 @@ import StudentDashboardProgressCards from '../components/dashboard/StudentDashbo
 import ContinueWatchingSection from '../components/dashboard/ContinueWatchingSection';
 import YourMentorTable from '../components/dashboard/YourMentorTable';
 import EmptyState from '../components/common/EmptyState';
+import { ErrorState, PermissionDenied } from '../components/common/DataState';
+import { interpretApiError } from '../services/api';
 
 const Dashboard = () => {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
+  const [loadFailure, setLoadFailure] = useState(null);
   const [dashboardData, setDashboardData] = useState({ enrollments: [], mentors: [] });
   const [dashboardSettings, setDashboardSettings] = useState(siteSettingsService.DASHBOARD_DEFAULTS);
 
@@ -24,20 +27,23 @@ const Dashboard = () => {
   const loadData = async () => {
     try {
       setLoading(true);
+      setLoadFailure(null);
       const [data, settings] = await Promise.all([
-        lmsService.getDashboard().catch(() => ({ enrollments: [], mentors: [] })),
-        siteSettingsService.getSiteSettings().catch(() => siteSettingsService.DASHBOARD_DEFAULTS),
+        lmsService.getDashboard(),
+        siteSettingsService.getSiteSettings().catch(() => null),
       ]);
-      setDashboardData(data);
-      setDashboardSettings({
-        dashboard_banner_title: settings.dashboard_banner_title,
-        dashboard_banner_cta_text: settings.dashboard_banner_cta_text,
-        dashboard_banner_cta_link: settings.dashboard_banner_cta_link,
-        dashboard_youtube_url: settings.dashboard_youtube_url || '',
-      });
+      setDashboardData(data || { enrollments: [], mentors: [] });
+      if (settings) {
+        setDashboardSettings({
+          dashboard_banner_title: settings.dashboard_banner_title,
+          dashboard_banner_cta_text: settings.dashboard_banner_cta_text,
+          dashboard_banner_cta_link: settings.dashboard_banner_cta_link,
+          dashboard_youtube_url: settings.dashboard_youtube_url || '',
+        });
+      }
     } catch (error) {
-      console.error('Failed to load dashboard:', error);
       setDashboardData({ enrollments: [], mentors: [] });
+      setLoadFailure(await interpretApiError(error, 'Failed to load your dashboard'));
     } finally {
       setLoading(false);
     }
@@ -62,6 +68,10 @@ const Dashboard = () => {
           </div>
           <div className="h-64 bg-gray-200 rounded-lg animate-pulse" />
         </div>
+      ) : loadFailure ? (
+        loadFailure.kind === 'denied'
+          ? <PermissionDenied message={loadFailure.message} />
+          : <ErrorState message={loadFailure.message} onRetry={loadData} />
       ) : (
         <div className="space-y-6 w-full max-w-full">
           <StudentDashboardBanner

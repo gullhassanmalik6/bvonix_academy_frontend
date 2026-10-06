@@ -1,16 +1,20 @@
 import { useState, useEffect } from 'react';
 import { adminService } from '../../services/adminService';
+import { interpretApiError } from '../../services/api';
 import { useToast } from '../../context/ToastContext';
 import Button from '../common/Button';
 import Card from '../common/Card';
 import Input from '../common/Input';
+import EmptyState from '../common/EmptyState';
+import { DataState, useCollectionView } from '../common/DataState';
 
-const AdminPaymentManagement = () => {
+const AdminPaymentManagement = ({ focusId = null }) => {
   const toast = useToast();
   const [payments, setPayments] = useState([]);
   const [students, setStudents] = useState([]);
   const [courses, setCourses] = useState([]);
   const [loading, setLoading] = useState(true);
+  const listView = useCollectionView();
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState({
     student_id: '',
@@ -24,7 +28,13 @@ const AdminPaymentManagement = () => {
 
   useEffect(() => { loadData(); }, []);
 
+  useEffect(() => {
+    if (!focusId || loading) return;
+    document.getElementById(`payment-${focusId}`)?.scrollIntoView({ block: 'center' });
+  }, [focusId, loading, payments]);
+
   const loadData = async () => {
+    listView.start();
     try {
       setLoading(true);
       const [payData, studentsData, coursesData] = await Promise.all([
@@ -32,11 +42,14 @@ const AdminPaymentManagement = () => {
         adminService.getStudents(0, 100),
         adminService.getCourses(0, 100, false),
       ]);
-      setPayments(payData.items || []);
+      const items = payData.items || [];
+      setPayments(items);
       setStudents(studentsData.items || []);
       setCourses(coursesData.items || []);
+      listView.succeed(items);
     } catch (err) {
-      toast.error(err.response?.data?.message || 'Failed to load payments');
+      setPayments([]);
+      await listView.fail(err, 'Failed to load payments');
     } finally {
       setLoading(false);
     }
@@ -50,7 +63,8 @@ const AdminPaymentManagement = () => {
       setShowForm(false);
       loadData();
     } catch (err) {
-      toast.error(err.response?.data?.message || 'Failed to create payment');
+      const failure = await interpretApiError(err, 'Failed to create payment');
+      toast.error(failure.kind === 'denied' ? `Permission denied. ${failure.message}` : failure.message);
     }
   };
 
@@ -60,11 +74,15 @@ const AdminPaymentManagement = () => {
       toast.success('Payment updated');
       loadData();
     } catch (err) {
-      toast.error(err.response?.data?.message || 'Failed to update');
+      const failure = await interpretApiError(err, 'Failed to update');
+      toast.error(failure.kind === 'denied' ? `Permission denied. ${failure.message}` : failure.message);
     }
   };
 
-  if (loading) return <p className="text-center py-8">Loading...</p>;
+  if (loading) return <p className="text-center py-8">Loading payments...</p>;
+  if (listView.status === 'error' || listView.status === 'denied') {
+    return <DataState status={listView.status} message={listView.message} onRetry={loadData} />;
+  }
 
   return (
     <div>
@@ -104,9 +122,16 @@ const AdminPaymentManagement = () => {
           </form>
         </Card>
       )}
+      {payments.length === 0 ? (
+        <EmptyState
+          icon="default"
+          title="No payment records"
+          description="Add a payment when a student pays by cash, transfer, card, or online."
+        />
+      ) : (
       <div className="space-y-3">
         {payments.map((p) => (
-          <Card key={p.id}>
+          <Card key={p.id} id={`payment-${p.id}`} className={focusId === p.id ? 'ring-2 ring-blue-600' : ''}>
             <div className="flex justify-between items-center">
               <div>
                 <p className="font-semibold">{p.amount} {p.currency}</p>
@@ -119,6 +144,7 @@ const AdminPaymentManagement = () => {
           </Card>
         ))}
       </div>
+      )}
     </div>
   );
 };

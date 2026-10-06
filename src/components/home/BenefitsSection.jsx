@@ -72,7 +72,7 @@ const BenefitsSection = () => {
             return (
               <div
                 key={i}
-                className="rounded-xl shadow-lg overflow-hidden flex flex-col"
+                className="rounded-3xl shadow-lg overflow-hidden flex flex-col"
                 style={{ backgroundColor: bgColor }}
               >
                 <div className="p-6 flex-1 flex flex-col">

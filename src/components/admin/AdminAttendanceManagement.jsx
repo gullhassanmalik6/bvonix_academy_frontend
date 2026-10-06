@@ -1,8 +1,11 @@
 import { useState, useEffect } from 'react';
 import { adminService } from '../../services/adminService';
+import { interpretApiError } from '../../services/api';
+import { DataState, useCollectionView } from '../common/DataState';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import Button from '../common/Button';
+import EmptyState from '../common/EmptyState';
 import Card from '../common/Card';
 import Input from '../common/Input';
 
@@ -13,6 +16,7 @@ const AdminAttendanceManagement = () => {
   const [courses, setCourses] = useState([]);
   const [enrollments, setEnrollments] = useState([]);
   const [loading, setLoading] = useState(true);
+  const listView = useCollectionView();
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState({
     student_id: '',
@@ -29,6 +33,7 @@ const AdminAttendanceManagement = () => {
   }, []);
 
   const loadData = async () => {
+    listView.start();
     try {
       setLoading(true);
       const [studentsData, coursesData, enrollmentsData] = await Promise.all([
@@ -38,9 +43,14 @@ const AdminAttendanceManagement = () => {
       ]);
       setStudents(studentsData.items || []);
       setCourses(coursesData.items || []);
-      setEnrollments(enrollmentsData.items || []);
+      const items = enrollmentsData.items || [];
+      setEnrollments(items);
+      listView.succeed(items);
     } catch (err) {
-      toast.error(err.response?.data?.message || 'Failed to load data');
+      setStudents([]);
+      setCourses([]);
+      setEnrollments([]);
+      await listView.fail(err, 'Failed to load attendance data');
     } finally {
       setLoading(false);
     }
@@ -71,20 +81,33 @@ const AdminAttendanceManagement = () => {
       toast.success('Attendance marked');
       setShowForm(false);
     } catch (err) {
-      toast.error(err.response?.data?.message || 'Failed to mark attendance');
+      const failure = await interpretApiError(err, 'Failed to mark attendance');
+      toast.error(failure.kind === 'denied' ? `Permission denied. ${failure.message}` : failure.message);
     }
   };
 
-  if (loading) return <div className="text-center py-8">Loading...</div>;
+  if (loading) return <div className="text-center py-8">Loading attendance...</div>;
+  if (listView.status === 'error' || listView.status === 'denied') {
+    return <DataState status={listView.status} message={listView.message} onRetry={loadData} />;
+  }
 
   return (
     <div>
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-2xl font-bold">Attendance Management</h2>
-        <Button onClick={() => setShowForm(!showForm)}>+ Mark Attendance</Button>
+        {enrollments.length > 0 && (
+          <Button onClick={() => setShowForm(!showForm)}>+ Mark Attendance</Button>
+        )}
       </div>
+      {enrollments.length === 0 && (
+        <EmptyState
+          icon="default"
+          title="No verified enrollments"
+          description="Verify an active enrollment before marking attendance for a student."
+        />
+      )}
 
-      {showForm && (
+      {showForm && enrollments.length > 0 && (
         <Card className="mb-6">
           <h3 className="text-lg font-semibold mb-4">Mark Attendance</h3>
           <form onSubmit={handleSubmit} className="space-y-4">

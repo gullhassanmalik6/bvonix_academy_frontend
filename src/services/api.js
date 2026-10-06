@@ -31,17 +31,51 @@ api.interceptors.request.use(
   }
 );
 
+function textFromPayload(data) {
+  if (!data || typeof data !== 'object') return '';
+  if (typeof data.message === 'string' && data.message.trim()) return data.message.trim();
+  const detail = data.detail;
+  if (typeof detail === 'string' && detail.trim()) return detail.trim();
+  if (Array.isArray(detail)) {
+    return detail
+      .map((item) => {
+        if (typeof item === 'string') return item;
+        if (item && typeof item.msg === 'string') return item.msg;
+        return '';
+      })
+      .filter(Boolean)
+      .join(' ');
+  }
+  return '';
+}
+
 export async function getApiErrorMessage(error, fallback = 'Request failed') {
   const data = error?.response?.data;
   if (data instanceof Blob) {
     try {
       const parsed = JSON.parse(await data.text());
-      return parsed.message || parsed.detail || fallback;
+      return textFromPayload(parsed) || fallback;
     } catch {
       return fallback;
     }
   }
-  return data?.message || data?.detail || error?.message || fallback;
+  return textFromPayload(data) || error?.message || fallback;
+}
+
+export async function interpretApiError(error, fallback = 'Request failed') {
+  const status = error?.response?.status;
+  let message = await getApiErrorMessage(error, fallback);
+  if (status === 403) {
+    if (!message || message === fallback || message === 'Request failed' || message === 'Network Error') {
+      message = 'You do not have permission to view this.';
+    }
+    return { kind: 'denied', status, message };
+  }
+  return { kind: 'error', status, message };
+}
+
+export function viewFromFailure(failure) {
+  return failure?.kind === 'denied' ? 'denied' : 'error';
 }
 
 // Response interceptor - handle errors

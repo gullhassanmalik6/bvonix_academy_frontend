@@ -3,18 +3,30 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { siteSettingsService } from '../../services/siteSettingsService';
 import SearchModal from '../common/SearchModal';
+import { isStudentNavActive, studentMobileMoreNavigation, studentNavigation } from '../../navigation/studentNavigation';
+import StudentMobileNav from './StudentMobileNav';
 import {
   FiHome,
-  FiMail,
   FiBook,
-  FiCheckSquare,
-  FiUsers,
+  FiFileText,
+  FiVideo,
+  FiFile,
+  FiBarChart2,
+  FiCalendar,
+  FiCreditCard,
+  FiAward,
+  FiBell,
+  FiMessageSquare,
+  FiUser,
+  FiUserCheck,
+  FiStar,
+  FiPlusCircle,
   FiSettings,
   FiLogOut,
   FiSearch,
   FiFilter,
   FiMenu,
-  FiBell,
+  FiX,
   FiChevronLeft,
   FiChevronRight,
 } from 'react-icons/fi';
@@ -57,50 +69,87 @@ const StudentDashboardLayout = ({ children, rightSidebar }) => {
     navigate('/');
   };
 
-  const overviewItems = [
-    { id: 'dashboard', label: 'Dashboard', path: '/dashboard', icon: FiHome },
-    { id: 'inbox', label: 'Inbox', path: '/lms', icon: FiMail },
-    { id: 'lesson', label: 'Lesson', path: '/lms', icon: FiBook },
-    { id: 'task', label: 'Task', path: '/lms', icon: FiCheckSquare },
-    { id: 'group', label: 'Group', path: '/lms', icon: FiUsers },
-  ];
+  const navIcons = {
+    dashboard: FiHome,
+    enrollments: FiBook,
+    assignments: FiFileText,
+    sessions: FiVideo,
+    materials: FiFile,
+    available: FiPlusCircle,
+    calendar: FiCalendar,
+    performance: FiBarChart2,
+    attendance: FiUserCheck,
+    certificates: FiStar,
+    payments: FiCreditCard,
+    scholarships: FiAward,
+    announcements: FiBell,
+    forum: FiMessageSquare,
+    profile: FiUser,
+    settings: FiSettings,
+  };
+
+  const navigation = studentNavigation();
+  const mobileMoreNavigation = studentMobileMoreNavigation();
 
   const friendsItems = dashboardSettings.dashboard_friends_items || [];
 
   const onNavClick = () => setIsMobileMenuOpen(false);
 
-  const sidebarContent = (closeOnNav = false) => (
+  const sidebarContent = (closeOnNav = false, { showBrand = true, entries = navigation, showFriends = true } = {}) => (
     <>
-      {/* Brand: logo + name */}
-      <div className="pt-6 pb-5 px-5 flex items-center gap-3">
-        <LogoIcon />
-        <span className="font-bold text-gray-800 text-lg uppercase tracking-tight">BVONIX ACADEMY</span>
-      </div>
-
-      {/* OVERVIEW */}
-      <div className="px-5 pt-2">
-        <p className="text-xs font-bold uppercase tracking-wider text-gray-700 mb-3">OVERVIEW</p>
-        <div className="space-y-0.5">
-          {overviewItems.map((item) => {
-            const Icon = item.icon;
-            const isActive = location.pathname === item.path || (item.path === '/lms' && location.pathname.startsWith('/lms'));
-            return (
-              <button
-                key={item.id}
-                onClick={() => { navigate(item.path); if (closeOnNav) onNavClick(); }}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors ${
-                  isActive ? 'text-primary-500' : 'text-gray-700 hover:bg-gray-50'
-                }`}
-              >
-                <Icon className={`w-5 h-5 flex-shrink-0 ${isActive ? 'text-primary-500' : 'text-gray-600'}`} />
-                <span className={`text-sm font-medium ${isActive ? 'text-primary-500' : 'text-gray-700'}`}>{item.label}</span>
-              </button>
-            );
-          })}
+      {showBrand && (
+        <div className="pt-6 pb-5 px-5 flex items-center gap-3">
+          <LogoIcon />
+          <span className="font-bold text-gray-800 text-lg uppercase tracking-tight">BVONIX ACADEMY</span>
         </div>
+      )}
+
+      <div className="px-5 pt-2">
+        {entries.map((entry) => {
+          if (entry.group) {
+            return (
+              <div key={entry.group} className="pt-4 first:pt-0">
+                <p className="text-xs font-bold uppercase tracking-wider text-gray-700 mb-2">{entry.group}</p>
+                <div className="space-y-0.5">
+                  {entry.items.map((item) => {
+                    const Icon = navIcons[item.id] || FiBook;
+                    const isActive = isStudentNavActive(item.path, location);
+                    return (
+                      <button
+                        key={item.id}
+                        onClick={() => { navigate(item.path); if (closeOnNav) onNavClick(); }}
+                        className={`w-full min-h-11 flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors ${
+                          isActive ? 'text-primary-500 bg-primary-50' : 'text-gray-700 hover:bg-gray-50'
+                        }`}
+                      >
+                        <Icon className={`w-5 h-5 flex-shrink-0 ${isActive ? 'text-primary-500' : 'text-gray-600'}`} />
+                        <span className={`text-sm font-medium ${isActive ? 'text-primary-500' : 'text-gray-700'}`}>{item.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          }
+
+          const Icon = navIcons[entry.id] || FiHome;
+          const isActive = isStudentNavActive(entry.path, location);
+          return (
+            <button
+              key={entry.id}
+              onClick={() => { navigate(entry.path); if (closeOnNav) onNavClick(); }}
+              className={`w-full min-h-11 flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors ${
+                isActive ? 'text-primary-500 bg-primary-50' : 'text-gray-700 hover:bg-gray-50'
+              }`}
+            >
+              <Icon className={`w-5 h-5 flex-shrink-0 ${isActive ? 'text-primary-500' : 'text-gray-600'}`} />
+              <span className={`text-sm font-medium ${isActive ? 'text-primary-500' : 'text-gray-700'}`}>{entry.label}</span>
+            </button>
+          );
+        })}
       </div>
 
-      {/* FRIENDS */}
+      {showFriends && (
       <div className="px-5 pt-8">
         <p className="text-xs font-bold uppercase tracking-wider text-gray-700 mb-3">FRIENDS</p>
         <div className="space-y-3">
@@ -121,42 +170,20 @@ const StudentDashboardLayout = ({ children, rightSidebar }) => {
               </div>
             ))
           ) : (
-            <>
-              {[1, 2, 3].map((i) => (
-                <div key={i} className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-full bg-gray-200 flex items-center justify-center flex-shrink-0 overflow-hidden">
-                    <span className="text-sm font-semibold text-gray-600">P</span>
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-bold text-gray-800">Prashant</p>
-                    <p className="text-xs text-gray-500">Software Developer</p>
-                  </div>
-                </div>
-              ))}
-            </>
+            <p className="text-sm text-gray-500">No contacts have been added yet.</p>
           )}
         </div>
       </div>
+      )}
 
-      {/* SETTINGS */}
-      <div className="px-5 pt-8 pb-6">
-        <p className="text-xs font-bold uppercase tracking-wider text-gray-700 mb-3">SETTINGS</p>
-        <div className="space-y-0.5">
-          <button
-            onClick={() => { navigate('/settings'); if (closeOnNav) onNavClick(); }}
-            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left text-gray-700 hover:bg-gray-50 transition-colors"
-          >
-            <FiSettings className="w-5 h-5 text-gray-600 flex-shrink-0" />
-            <span className="text-sm font-medium text-gray-700">Settings</span>
-          </button>
-          <button
-            onClick={() => { handleLogout(); if (closeOnNav) onNavClick(); }}
-            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left text-red-600 hover:bg-red-50 transition-colors"
-          >
-            <FiLogOut className="w-5 h-5 text-red-600 flex-shrink-0" />
-            <span className="text-sm font-medium text-red-600">Logout</span>
-          </button>
-        </div>
+      <div className="px-5 pt-6 pb-6">
+        <button
+          onClick={() => { handleLogout(); if (closeOnNav) onNavClick(); }}
+          className="w-full min-h-11 flex items-center gap-3 px-3 py-2.5 rounded-lg text-left text-red-600 hover:bg-red-50 transition-colors"
+        >
+          <FiLogOut className="w-5 h-5 text-red-600 flex-shrink-0" />
+          <span className="text-sm font-medium text-red-600">Logout</span>
+        </button>
       </div>
     </>
   );
@@ -200,10 +227,12 @@ const StudentDashboardLayout = ({ children, rightSidebar }) => {
                 <LogoIcon />
                 <span className="font-bold text-gray-800 uppercase">BVONIX ACADEMY</span>
               </div>
-              <button onClick={() => setIsMobileMenuOpen(false)} className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg">×</button>
+              <button type="button" onClick={() => setIsMobileMenuOpen(false)} className="min-h-11 min-w-11 inline-flex items-center justify-center text-gray-500 hover:bg-gray-100 rounded-lg" aria-label="Close menu">
+                <FiX className="w-5 h-5" />
+              </button>
             </div>
-            <nav className="p-4 overflow-y-auto scrollbar-hide">
-              {sidebarContent(true)}
+            <nav className="overflow-y-auto scrollbar-hide pb-24" aria-label="More student sections">
+              {sidebarContent(true, { showBrand: false, entries: mobileMoreNavigation, showFriends: false })}
             </nav>
           </aside>
         </>
@@ -219,14 +248,17 @@ const StudentDashboardLayout = ({ children, rightSidebar }) => {
         <header className="flex-shrink-0 bg-white border-b border-gray-200 px-4 sm:px-6 py-3 sticky top-0 z-20">
           <div className="flex items-center gap-3 w-full max-w-full">
             <button
+              type="button"
               onClick={() => setIsMobileMenuOpen(true)}
-              className="lg:hidden p-2 rounded-lg text-gray-600 hover:bg-gray-100 flex-shrink-0"
+              className="lg:hidden min-h-11 min-w-11 inline-flex items-center justify-center rounded-lg text-gray-600 hover:bg-gray-100 flex-shrink-0"
+              aria-label="More learning sections"
+              aria-expanded={isMobileMenuOpen}
             >
               <FiMenu className="w-5 h-5" />
             </button>
             <button
               onClick={() => setShowSearchModal(true)}
-              className="flex-1 min-w-0 flex items-center gap-3 px-4 py-2.5 bg-gray-100 rounded-xl text-left text-gray-500 hover:bg-gray-200 transition-colors"
+              className="flex-1 min-w-0 min-h-11 flex items-center gap-3 px-4 bg-gray-100 rounded-xl text-left text-gray-500 hover:bg-gray-200 transition-colors"
             >
               <FiSearch className="w-5 h-5 text-gray-400 flex-shrink-0" />
               <span className="flex-1 truncate text-sm">
@@ -235,9 +267,10 @@ const StudentDashboardLayout = ({ children, rightSidebar }) => {
               <FiFilter className="w-4 h-4 text-gray-400 flex-shrink-0" />
             </button>
             <button
-              onClick={() => navigate('/lms')}
-              className="p-2.5 rounded-lg text-gray-600 hover:bg-gray-100 flex-shrink-0"
-              title="Notifications"
+              onClick={() => navigate('/lms?section=announcements')}
+              className="hidden lg:inline-flex p-2.5 rounded-lg text-gray-600 hover:bg-gray-100 flex-shrink-0"
+              title="Announcements"
+              aria-label="Announcements"
             >
               <FiBell className="w-5 h-5" />
             </button>
@@ -245,7 +278,7 @@ const StudentDashboardLayout = ({ children, rightSidebar }) => {
         </header>
 
         {/* Main content - Banner, YouTube, Progress, etc. - BELOW header */}
-        <main className="flex-1 overflow-y-auto overflow-x-hidden p-4 sm:p-6 bg-white min-h-0">
+        <main className="flex-1 overflow-y-auto overflow-x-hidden p-4 sm:p-6 pb-[calc(5.5rem+env(safe-area-inset-bottom))] lg:pb-6 bg-white min-h-0">
           {children}
         </main>
       </div>
@@ -275,6 +308,7 @@ const StudentDashboardLayout = ({ children, rightSidebar }) => {
         </button>
       )}
 
+      <StudentMobileNav />
       <SearchModal isOpen={showSearchModal} onClose={() => setShowSearchModal(false)} />
     </div>
   );

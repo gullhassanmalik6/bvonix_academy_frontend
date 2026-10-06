@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { authService } from '../services/authService';
+import { canAccessAdminPanel } from '../navigation/adminAccess';
 
 const AuthContext = createContext(null);
 
@@ -73,7 +74,7 @@ export const AuthProvider = ({ children }) => {
       
       return { 
         success: true,
-        isAdmin: userData.role === 'admin' // Return admin status for redirect
+        canAccessAdmin: canAccessAdminPanel(userData.role),
       };
     } catch (error) {
       return {
@@ -86,7 +87,7 @@ export const AuthProvider = ({ children }) => {
   const register = async (data) => {
     try {
       // Register the user
-      const userData = await authService.register(data);
+      await authService.register(data);
       
       // Auto-login after registration
       const loginResult = await login(data.email, data.password);
@@ -125,11 +126,13 @@ export const AuthProvider = ({ children }) => {
   };
 
   const isAdmin = user?.role === 'admin';
+  const canAccessAdmin = canAccessAdminPanel(user?.role);
 
   const value = {
     user,
     isAuthenticated,
     isAdmin,
+    canAccessAdmin,
     loading,
     login,
     register,

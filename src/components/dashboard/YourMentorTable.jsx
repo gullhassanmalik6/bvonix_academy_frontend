@@ -21,14 +21,31 @@ const YourMentorTable = ({ mentors = [] }) => {
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-lg font-semibold text-gray-900">Your Mentor</h3>
         <button
-          onClick={() => navigate('/lms')}
+          onClick={() => navigate('/lms?section=enrollments')}
           className="text-sm text-primary-500 hover:text-primary-600 font-medium"
         >
           See All
         </button>
       </div>
       <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-        <div className="overflow-x-auto">
+        <ul className="md:hidden divide-y divide-gray-200">
+          {mentors.map((m) => (
+            <li key={m.id} className="p-4">
+              <p className="text-sm font-medium text-gray-900">{m.name}</p>
+              <p className="text-xs text-gray-500 mt-0.5">{formatDate(m.enrollment_date)}</p>
+              <p className="text-sm text-gray-700 mt-2 break-words">{m.course_title}</p>
+              <p className="text-xs text-gray-500 mt-1">{m.specialization || 'Course'}</p>
+              <button
+                type="button"
+                onClick={() => navigate(`/lms/course/${m.course_id}`)}
+                className="mt-3 min-h-11 text-sm font-semibold text-blue-500"
+              >
+                Show details
+              </button>
+            </li>
+          ))}
+        </ul>
+        <div className="hidden md:block overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
             <thead>
               <tr className="bg-gray-50">

@@ -5,16 +5,18 @@ import { downloadCardPreviewPdf, fetchPreviewCardData } from '../../utils/cardPr
 import { courseService } from '../../services/courseService';
 import { useToast } from '../../context/ToastContext';
 import { getApiErrorMessage, getFileUrl } from '../../services/api';
+import { DataState, useCollectionView } from '../common/DataState';
+import EmptyState from '../common/EmptyState';
 import Button from '../common/Button';
 import Card from '../common/Card';
 import Input from '../common/Input';
 
-const AdminEnrollmentManagement = () => {
+const AdminEnrollmentManagement = ({ focusId = null }) => {
   const toast = useToast();
   const [enrollments, setEnrollments] = useState([]);
   const [courses, setCourses] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const listView = useCollectionView();
   const [filters, setFilters] = useState({
     status: '',
     payment_status: '',
@@ -28,6 +30,11 @@ const AdminEnrollmentManagement = () => {
     loadData();
   }, [filters]);
 
+  useEffect(() => {
+    if (!focusId || loading) return;
+    document.getElementById(`enrollment-${focusId}`)?.scrollIntoView({ block: 'center' });
+  }, [focusId, loading, enrollments]);
+
   const loadData = async () => {
     try {
       setLoading(true);
@@ -35,13 +42,28 @@ const AdminEnrollmentManagement = () => {
         adminService.getEnrollments(0, 100, filters.status || null, filters.payment_status || null, filters.verified || null),
         courseService.getCourses({ skip: 0, limit: 100 }),
       ]);
-      setEnrollments(enrollmentsData.items || []);
+      const items = enrollmentsData.items || [];
+      setEnrollments(items);
       setCourses(coursesData.items || []);
-      setError(null);
+      listView.succeed(items);
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to load enrollments');
+      setEnrollments([]);
+      await listView.fail(err, 'Failed to load enrollments');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleTransition = async (enrollmentId, workflowState, label) => {
+    if (!window.confirm(`${label}?`)) {
+      return;
+    }
+    try {
+      await adminService.transitionEnrollment(enrollmentId, workflowState);
+      toast.success('Enrollment updated', { duration: 3000 });
+      loadData();
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to update enrollment', { duration: 4000 });
     }
   };
 
@@ -128,12 +150,6 @@ const AdminEnrollmentManagement = () => {
 
   return (
     <div className="space-y-4">
-      {error && (
-        <div className="p-4 bg-red-50 border border-red-200 text-red-700 rounded">
-          {error}
-        </div>
-      )}
-
       {/* Filters */}
       <Card>
         <h3 className="text-lg font-semibold mb-4">Filters</h3>
@@ -182,13 +198,25 @@ const AdminEnrollmentManagement = () => {
 
       {/* Enrollments List */}
       <div className="space-y-4">
-        {enrollments.length === 0 ? (
-          <Card>
-            <p className="text-center text-gray-500 py-8">No enrollments found.</p>
-          </Card>
-        ) : (
-          enrollments.map((enrollment) => (
-            <Card key={enrollment.id}>
+        <DataState
+          status={loading ? 'loading' : listView.status}
+          message={listView.message}
+          onRetry={loadData}
+          loading={<div className="text-center py-8">Loading enrollments...</div>}
+          empty={(
+            <EmptyState
+              icon="courses"
+              title="No enrollments match"
+              description="Adjust the filters, or wait for a student to submit an enrollment application."
+            />
+          )}
+        >
+          {enrollments.map((enrollment) => (
+            <Card
+              key={enrollment.id}
+              id={`enrollment-${enrollment.id}`}
+              className={focusId === enrollment.id ? 'ring-2 ring-blue-600' : ''}
+            >
               <div className="flex justify-between items-start">
                 <div className="flex-1">
                   <div className="flex items-center space-x-2 mb-2">
@@ -210,6 +238,11 @@ const AdminEnrollmentManagement = () => {
                     }`}>
                       Payment: {enrollment.payment_status}
                     </span>
+                    {enrollment.workflow_state && (
+                      <span className="px-2 py-1 rounded text-xs font-medium bg-slate-100 text-slate-800">
+                        {enrollment.workflow_state.replaceAll('_', ' ')}
+                      </span>
+                    )}
                     {enrollment.verified_by_admin && (
                       <span className="px-2 py-1 rounded text-xs font-medium bg-blue-100 text-blue-800">
                         ✓ Verified
@@ -290,7 +323,45 @@ const AdminEnrollmentManagement = () => {
                       ✕ Cancel Enrollment
                     </Button>
                   )}
-                  {enrollment.payment_receipt_url && !enrollment.verified_by_admin && (
+                  {enrollment.workflow_state === 'receipt_uploaded' && (
+                    <Button
+                      onClick={() => handleTransition(enrollment.id, 'under_review', 'Start payment review')}
+                      className="bg-amber-500 hover:bg-amber-600 text-sm whitespace-nowrap"
+                    >
+                      Start review
+                    </Button>
+                  )}
+                  {enrollment.workflow_state === 'under_review' && (
+                    <>
+                      <Button
+                        onClick={() => handleTransition(enrollment.id, 'approved', 'Approve this payment')}
+                        className="bg-emerald-500 hover:bg-emerald-600 text-sm whitespace-nowrap"
+                      >
+                        Approve payment
+                      </Button>
+                      <Button
+                        onClick={() => handleTransition(enrollment.id, 'resubmission_required', 'Ask the student to upload the receipt again')}
+                        className="bg-amber-500 hover:bg-amber-600 text-sm whitespace-nowrap"
+                      >
+                        Request resubmission
+                      </Button>
+                      <Button
+                        onClick={() => handleTransition(enrollment.id, 'rejected', 'Reject this payment')}
+                        className="bg-red-500 hover:bg-red-600 text-sm whitespace-nowrap"
+                      >
+                        Reject payment
+                      </Button>
+                    </>
+                  )}
+                  {enrollment.workflow_state === 'rejected' && (
+                    <Button
+                      onClick={() => handleTransition(enrollment.id, 'resubmission_required', 'Allow the student to upload a new receipt')}
+                      className="bg-amber-500 hover:bg-amber-600 text-sm whitespace-nowrap"
+                    >
+                      Allow resubmission
+                    </Button>
+                  )}
+                  {['receipt_uploaded', 'under_review', 'approved'].includes(enrollment.workflow_state) && (
                     <Button
                       onClick={() => handleVerify(enrollment.id)}
                       className="bg-green-500 hover:bg-green-600 text-sm whitespace-nowrap"
@@ -353,8 +424,8 @@ const AdminEnrollmentManagement = () => {
                 </div>
               </div>
             </Card>
-          ))
-        )}
+          ))}
+        </DataState>
       </div>
 
       {cardFormEnrollmentId && cardFormData && (

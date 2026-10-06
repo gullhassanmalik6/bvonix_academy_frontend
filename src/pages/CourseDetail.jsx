@@ -4,6 +4,8 @@ import { courseService } from '../services/courseService';
 import { siteSettingsService } from '../services/siteSettingsService';
 import { useAuth } from '../context/AuthContext';
 import Button from '../components/common/Button';
+import { ErrorState, PermissionDenied } from '../components/common/DataState';
+import { interpretApiError } from '../services/api';
 import EnrollButton from '../components/common/EnrollButton';
 import { formatPKR } from '../utils/helpers';
 import { getCourseCardTheme, COURSE_CARD_ICONS } from '../utils/courseCardTheme';
@@ -12,11 +14,11 @@ import { FiClock, FiArrowLeft } from 'react-icons/fi';
 const CourseDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { isAuthenticated, isAdmin } = useAuth();
+  const { isAuthenticated, canAccessAdmin } = useAuth();
   const [course, setCourse] = useState(null);
   const [theme, setTheme] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [failure, setFailure] = useState(null);
 
   useEffect(() => {
     loadCourse();
@@ -32,10 +34,15 @@ const CourseDetail = () => {
       const subjects = settings?.subjects_items || siteSettingsService.SUBJECTS_DEFAULTS?.subjects_items || [];
       setCourse(data);
       setTheme(getCourseCardTheme(data, 0, subjects));
-      setError(null);
+      setFailure(null);
     } catch (err) {
-      setError('Course not found');
-      console.error(err);
+      setCourse(null);
+      const interpreted = await interpretApiError(err, 'Failed to load this course');
+      if (interpreted.status === 404) {
+        setFailure({ kind: 'missing', message: 'This course is not available.' });
+      } else {
+        setFailure(interpreted);
+      }
     } finally {
       setLoading(false);
     }
@@ -50,13 +57,23 @@ const CourseDetail = () => {
     );
   }
 
-  if (error || !course) {
+  if (failure?.kind === 'denied') {
+    return <PermissionDenied message={failure.message} />;
+  }
+
+  if (failure || !course) {
     return (
-      <div className="text-center py-12">
-        <p className="text-red-600 mb-4">{error || 'Course not found'}</p>
-        <Button onClick={() => navigate('/courses')} variant="primary">
-          Back to Courses
-        </Button>
+      <div className="max-w-xl mx-auto py-12">
+        <ErrorState
+          title={failure?.kind === 'missing' ? 'Course not available' : 'Could not load this course'}
+          message={failure?.message || 'This course is not available.'}
+          onRetry={failure?.kind === 'missing' ? undefined : loadCourse}
+        />
+        <div className="text-center">
+          <Button onClick={() => navigate('/courses')} variant="primary">
+            Back to Courses
+          </Button>
+        </div>
       </div>
     );
   }
@@ -85,7 +102,7 @@ const CourseDetail = () => {
               <IconComponent className="w-8 h-8" style={{ color: bgColor }} />
             </div>
             <div className="min-w-0 flex-1">
-              {isAdmin && (
+              {canAccessAdmin && (
                 <span className="inline-block px-2.5 py-0.5 rounded-full text-xs bg-white/20 mb-3">
                   {course.is_published ? 'Published' : 'Draft'}
                 </span>
