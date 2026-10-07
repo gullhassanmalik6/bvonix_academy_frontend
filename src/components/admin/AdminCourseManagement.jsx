@@ -1,12 +1,15 @@
 import { useState, useEffect } from 'react';
 import { adminService } from '../../services/adminService';
+import { interpretApiError } from '../../services/api';
 import Button from '../common/Button';
 import Card from '../common/Card';
+import EmptyState from '../common/EmptyState';
+import { DataState, useCollectionView } from '../common/DataState';
 
 const AdminCourseManagement = () => {
   const [courses, setCourses] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const listView = useCollectionView();
+  const [actionError, setActionError] = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [editingCourse, setEditingCourse] = useState(null);
   const [formData, setFormData] = useState({
@@ -23,15 +26,15 @@ const AdminCourseManagement = () => {
   }, []);
 
   const loadCourses = async () => {
+    listView.start();
     try {
-      setLoading(true);
       const response = await adminService.getCourses(0, 100, false);
-      setCourses(response.items || []);
-      setError(null);
+      const items = response.items || [];
+      setCourses(items);
+      listView.succeed(items);
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to load courses');
-    } finally {
-      setLoading(false);
+      setCourses([]);
+      await listView.fail(err, 'Failed to load courses');
     }
   };
 
@@ -48,7 +51,8 @@ const AdminCourseManagement = () => {
       resetForm();
       loadCourses();
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to save course');
+      const failure = await interpretApiError(err, 'Failed to save course');
+      setActionError(failure.kind === 'denied' ? `Permission denied. ${failure.message}` : failure.message);
     }
   };
 
@@ -73,7 +77,8 @@ const AdminCourseManagement = () => {
       await adminService.deleteCourse(courseId);
       loadCourses();
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to delete course');
+      const failure = await interpretApiError(err, 'Failed to delete course');
+      setActionError(failure.kind === 'denied' ? `Permission denied. ${failure.message}` : failure.message);
     }
   };
 
@@ -88,10 +93,6 @@ const AdminCourseManagement = () => {
     });
   };
 
-  if (loading) {
-    return <div className="text-center py-8">Loading courses...</div>;
-  }
-
   return (
     <div>
       <div className="flex justify-between items-center mb-6">
@@ -101,9 +102,9 @@ const AdminCourseManagement = () => {
         </Button>
       </div>
 
-      {error && (
-        <div className="mb-4 p-4 bg-red-50 border border-red-200 text-red-700 rounded">
-          {error}
+      {actionError && (
+        <div className="mb-4 p-4 bg-red-50 border border-red-200 text-red-700 rounded" role="alert">
+          {actionError}
         </div>
       )}
 
@@ -207,13 +208,21 @@ const AdminCourseManagement = () => {
         </Card>
       )}
 
+      <DataState
+        status={listView.status}
+        message={listView.message}
+        onRetry={loadCourses}
+        loading={<div className="text-center py-8">Loading courses...</div>}
+        empty={(
+          <EmptyState
+            icon="courses"
+            title="No courses yet"
+            description="Add a course, then publish it when students should be able to enroll."
+          />
+        )}
+      >
       <div className="grid gap-4">
-        {courses.length === 0 ? (
-          <Card>
-            <p className="text-center text-gray-500 py-8">No courses found</p>
-          </Card>
-        ) : (
-          courses.map((course) => (
+          {courses.map((course) => (
             <Card key={course.id}>
               <div className="flex justify-between items-start">
                 <div className="flex-1">
@@ -247,9 +256,9 @@ const AdminCourseManagement = () => {
                 </div>
               </div>
             </Card>
-          ))
-        )}
+          ))}
       </div>
+      </DataState>
     </div>
   );
 };

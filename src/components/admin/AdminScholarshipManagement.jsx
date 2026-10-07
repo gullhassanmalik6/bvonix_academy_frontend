@@ -1,16 +1,20 @@
 import { useState, useEffect } from 'react';
 import { adminService } from '../../services/adminService';
+import { interpretApiError } from '../../services/api';
 import { useToast } from '../../context/ToastContext';
 import Button from '../common/Button';
 import Card from '../common/Card';
 import Input from '../common/Input';
+import EmptyState from '../common/EmptyState';
+import { DataState, useCollectionView } from '../common/DataState';
 
-const AdminScholarshipManagement = () => {
+const AdminScholarshipManagement = ({ focusId = null }) => {
   const toast = useToast();
   const [scholarships, setScholarships] = useState([]);
   const [students, setStudents] = useState([]);
   const [courses, setCourses] = useState([]);
   const [loading, setLoading] = useState(true);
+  const listView = useCollectionView();
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState({
     student_id: '',
@@ -24,7 +28,13 @@ const AdminScholarshipManagement = () => {
 
   useEffect(() => { loadData(); }, []);
 
+  useEffect(() => {
+    if (!focusId || loading) return;
+    document.getElementById(`scholarship-${focusId}`)?.scrollIntoView({ block: 'center' });
+  }, [focusId, loading, scholarships]);
+
   const loadData = async () => {
+    listView.start();
     try {
       setLoading(true);
       const [schData, studentsData, coursesData] = await Promise.all([
@@ -32,11 +42,14 @@ const AdminScholarshipManagement = () => {
         adminService.getStudents(0, 100),
         adminService.getCourses(0, 100, false),
       ]);
-      setScholarships(schData.items || []);
+      const items = schData.items || [];
+      setScholarships(items);
       setStudents(studentsData.items || []);
       setCourses(coursesData.items || []);
+      listView.succeed(items);
     } catch (err) {
-      toast.error(err.response?.data?.message || 'Failed to load scholarships');
+      setScholarships([]);
+      await listView.fail(err, 'Failed to load scholarships');
     } finally {
       setLoading(false);
     }
@@ -54,7 +67,8 @@ const AdminScholarshipManagement = () => {
       setShowForm(false);
       loadData();
     } catch (err) {
-      toast.error(err.response?.data?.message || 'Failed to create scholarship');
+      const failure = await interpretApiError(err, 'Failed to create scholarship');
+      toast.error(failure.kind === 'denied' ? `Permission denied. ${failure.message}` : failure.message);
     }
   };
 
@@ -66,13 +80,17 @@ const AdminScholarshipManagement = () => {
       toast.success('Scholarship terminated');
       loadData();
     } catch (err) {
-      toast.error(err.response?.data?.message || 'Failed to terminate');
+      const failure = await interpretApiError(err, 'Failed to terminate');
+      toast.error(failure.kind === 'denied' ? `Permission denied. ${failure.message}` : failure.message);
     }
   };
 
   const getCourseTitle = (id) => courses.find((c) => c.id === id)?.title || 'All courses';
 
-  if (loading) return <p className="text-center py-8">Loading...</p>;
+  if (loading) return <p className="text-center py-8">Loading scholarships...</p>;
+  if (listView.status === 'error' || listView.status === 'denied') {
+    return <DataState status={listView.status} message={listView.message} onRetry={loadData} />;
+  }
 
   return (
     <div>
@@ -115,9 +133,16 @@ const AdminScholarshipManagement = () => {
           </form>
         </Card>
       )}
+      {scholarships.length === 0 ? (
+        <EmptyState
+          icon="scholarships"
+          title="No scholarships"
+          description="Create a scholarship for a student after their enrollment is active."
+        />
+      ) : (
       <div className="space-y-3">
         {scholarships.map((s) => (
-          <Card key={s.id}>
+          <Card key={s.id} id={`scholarship-${s.id}`} className={focusId === s.id ? 'ring-2 ring-blue-600' : ''}>
             <div className="flex justify-between">
               <div>
                 <h4 className="font-semibold capitalize">{s.scholarship_type} - {s.amount}%</h4>
@@ -131,6 +156,7 @@ const AdminScholarshipManagement = () => {
           </Card>
         ))}
       </div>
+      )}
     </div>
   );
 };

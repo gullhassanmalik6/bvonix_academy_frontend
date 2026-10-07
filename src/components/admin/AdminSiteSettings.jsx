@@ -4,12 +4,15 @@ import Button from '../common/Button';
 import Input from '../common/Input';
 import { siteSettingsService } from '../../services/siteSettingsService';
 import { useToast } from '../../context/ToastContext';
+import { interpretApiError } from '../../services/api';
+import { DataState } from '../common/DataState';
 import { FiUpload, FiSave, FiPlus, FiTrash2 } from 'react-icons/fi';
 import AdminLogoSettings from './AdminLogoSettings';
 
 const AdminSiteSettings = () => {
   const toast = useToast();
   const [loading, setLoading] = useState(true);
+  const [loadFailure, setLoadFailure] = useState(null);
   const [saving, setSaving] = useState(false);
   const [savingCommunity, setSavingCommunity] = useState(false);
   const [savingMilestones, setSavingMilestones] = useState(false);
@@ -80,6 +83,7 @@ const AdminSiteSettings = () => {
   const loadSiteSettings = async () => {
     try {
       setLoading(true);
+      setLoadFailure(null);
       const data = await siteSettingsService.getSiteSettings();
       setForm({
         hero_headline: data.hero_headline || '',
@@ -153,7 +157,7 @@ const AdminSiteSettings = () => {
       const fItems = data?.dashboard_friends_items || siteSettingsService.DASHBOARD_DEFAULTS?.dashboard_friends_items || [];
       setDashboardFriendsItems(Array.isArray(fItems) ? fItems.map((i) => ({ name: i?.name ?? '', role: i?.role ?? '', avatar_url: i?.avatar_url ?? null })) : []);
     } catch (err) {
-      toast.error('Failed to load site settings');
+      setLoadFailure(await interpretApiError(err, 'Failed to load site settings'));
     } finally {
       setLoading(false);
     }
@@ -577,6 +581,16 @@ const AdminSiteSettings = () => {
       <Card>
         <div className="py-12 text-center text-gray-500">Loading site settings...</div>
       </Card>
+    );
+  }
+
+  if (loadFailure) {
+    return (
+      <DataState
+        status={loadFailure.kind === 'denied' ? 'denied' : 'error'}
+        message={loadFailure.message}
+        onRetry={loadSiteSettings}
+      />
     );
   }
 

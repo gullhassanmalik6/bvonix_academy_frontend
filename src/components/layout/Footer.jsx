@@ -104,6 +104,13 @@ const ContactDropdown = ({ contactLabel, validContacts, defaultContact }) => {
   );
 };
 
+const QUICK_LINKS = [
+  { label: 'Home', to: '/' },
+  { label: 'Courses', to: '/courses' },
+  { label: 'About', to: '/about' },
+  { label: 'Contact', to: '/contact' },
+];
+
 const Footer = () => {
   const [settings, setSettings] = useState(null);
 
@@ -124,7 +131,6 @@ const Footer = () => {
     );
   }
 
-  const brandName = settings.footer_brand_name || 'Bvonix Academy';
   const contactLabel = settings.footer_contact_label || 'Contact Bvonix Academy';
   const rawContacts = settings.footer_contacts || siteSettingsService.FOOTER_DEFAULTS?.footer_contacts || [];
   const legacyType = settings.footer_contact_type || 'whatsapp';
@@ -143,82 +149,104 @@ const Footer = () => {
   const defaultContact = validContacts[0] || { type: 'whatsapp', value: '' };
 
   return (
-    <footer className="bg-[#0A1628] text-white mt-auto">
-      {/* Upper section */}
-      <div className="container mx-auto px-4 py-10">
-        <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-8">
-          {/* Left: Brand + Social */}
+    <footer className="relative mt-auto overflow-hidden bg-[#0A1628] text-white">
+      <div className="pointer-events-none absolute -right-16 -top-20 h-56 w-56 rounded-full bg-primary-500/10" />
+      <div className="pointer-events-none absolute bottom-10 left-[38%] h-24 w-24 rounded-full border border-white/10" />
+
+      <div className="container relative mx-auto px-4 py-14">
+        <div className="grid grid-cols-1 gap-12 md:grid-cols-2 lg:grid-cols-3">
           <div>
-            <div className="mb-4">
-              <SiteLogo variant="dark" />
-            </div>
+            <SiteLogo variant="dark" />
+            <p className="mt-4 max-w-sm text-sm leading-relaxed text-white/70">
+              Practical, industry-ready tech education with internship, job guidance, and earning opportunities.
+            </p>
+          </div>
+
+          <div>
+            <h2 className="text-sm font-bold uppercase tracking-wider text-white">Quick Links</h2>
+            <ul className="mt-5 space-y-3">
+              {QUICK_LINKS.map((item) => (
+                <li key={item.to}>
+                  <Link
+                    to={item.to}
+                    className="footer-link inline-block text-sm text-white/75 transition-all duration-200 hover:translate-x-1 hover:text-primary-300"
+                  >
+                    {item.label}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <div>
+            <ContactDropdown
+              contactLabel={contactLabel}
+              validContacts={validContacts}
+              defaultContact={defaultContact}
+            />
             {address && (
-              <p className="flex items-start gap-2 text-white/70 text-sm max-w-xs mb-4">
-                <FiMapPin className="w-4 h-4 shrink-0 mt-0.5" />
+              <p className="mt-5 flex items-start gap-2 text-sm text-white/70 max-w-xs">
+                <FiMapPin className="mt-0.5 h-4 w-4 shrink-0" />
                 <span>{address}</span>
               </p>
             )}
-            <div className="flex gap-4">
+            <div className="mt-5 flex flex-wrap gap-3">
               {socialLinks.map((item, i) => {
                 const IconComponent = SOCIAL_ICONS[item.platform?.toLowerCase()];
                 if (!IconComponent) return null;
                 const url = item.url?.trim();
-                const content = <IconComponent className="w-6 h-6 text-white hover:opacity-80 transition-opacity" />;
-                return (
-                  <span key={i}>
-                    {url ? (
-                      <a href={url.startsWith('http') ? url : `https://${url}`} target="_blank" rel="noopener noreferrer" aria-label={item.platform}>
-                        {content}
-                      </a>
-                    ) : (
-                      <span className="opacity-60 cursor-default">{content}</span>
-                    )}
+                const content = (
+                  <span className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/15 bg-white/5 shadow-[0_8px_16px_rgba(0,0,0,0.18)] transition-all duration-200 hover:-translate-y-0.5 hover:border-primary-400/60 hover:text-primary-300">
+                    <IconComponent className="h-4 w-4" />
                   </span>
+                );
+                return url ? (
+                  <a
+                    key={i}
+                    href={url.startsWith('http') ? url : `https://${url}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label={item.platform}
+                  >
+                    {content}
+                  </a>
+                ) : (
+                  <span key={i} className="opacity-60">{content}</span>
                 );
               })}
             </div>
+            <Link
+              to="/register"
+              className="mt-6 inline-flex items-center rounded-lg bg-primary-500 px-5 py-2.5 text-sm font-semibold text-white shadow-[0_10px_20px_rgba(229,57,53,0.28)] transition-colors hover:bg-primary-600"
+            >
+              Start Learning
+            </Link>
           </div>
-
-          {/* Right: Contact label + dropdown */}
-          <ContactDropdown
-            contactLabel={contactLabel}
-            validContacts={validContacts}
-            defaultContact={defaultContact}
-          />
         </div>
-
-        {/* Legal links with vertical separators */}
-        {legalLinks.length > 0 && (
-          <div className="flex flex-wrap items-center gap-2 mt-8 pt-8 border-t border-white/20">
-            {legalLinks.map((link, i) => {
-              const url = link.url || '#';
-              const isExternal = url.startsWith('http://') || url.startsWith('https://');
-              const href = isExternal ? url : (url.startsWith('/') ? url : `/${url}`);
-              return (
-                <React.Fragment key={i}>
-                  {i > 0 && <span className="text-white/40">|</span>}
-                  {isExternal ? (
-                    <a href={href} target="_blank" rel="noopener noreferrer" className="text-white hover:underline text-sm">
-                      {link.label || 'Link'}
-                    </a>
-                  ) : (
-                    <Link to={href} className="text-white hover:underline text-sm">
-                      {link.label || 'Link'}
-                    </Link>
-                  )}
-                </React.Fragment>
-              );
-            })}
-          </div>
-        )}
       </div>
 
-      {/* Lower section - copyright */}
-      <div className="border-t border-white/20 py-6">
-        <div className="container mx-auto px-4">
-          <p className="text-white/80 text-sm text-center max-w-3xl mx-auto leading-relaxed">
-            {copyrightText}
-          </p>
+      <div className="border-t border-white/15">
+        <div className="container mx-auto flex flex-col items-center justify-between gap-4 px-4 py-6 sm:flex-row">
+          <p className="text-center text-sm text-white/75 sm:text-left">{copyrightText}</p>
+          {legalLinks.length > 0 && (
+            <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2">
+              {legalLinks.map((link, i) => {
+                const url = link.url || '#';
+                const isExternal = url.startsWith('http://') || url.startsWith('https://');
+                const href = isExternal ? url : (url.startsWith('/') ? url : `/${url}`);
+                const className = 'footer-link text-sm text-white/70 transition-colors duration-200 hover:text-primary-300 hover:underline';
+                return isExternal ? (
+                  <a key={i} href={href} target="_blank" rel="noopener noreferrer" className={className}>
+                    {link.label || 'Link'}
+                  </a>
+                ) : (
+                  <Link key={i} to={href} className={className}>
+                    {link.label || 'Link'}
+                  </Link>
+                );
+              })}
+            </div>
+          )}
         </div>
       </div>
     </footer>

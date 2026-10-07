@@ -1,12 +1,15 @@
 import { useState, useEffect } from 'react';
 import { adminService } from '../../services/adminService';
+import { interpretApiError } from '../../services/api';
 import Button from '../common/Button';
 import Card from '../common/Card';
+import EmptyState from '../common/EmptyState';
+import { DataState, useCollectionView } from '../common/DataState';
 
 const AdminStudentManagement = () => {
   const [students, setStudents] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const listView = useCollectionView();
+  const [actionError, setActionError] = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [editingStudent, setEditingStudent] = useState(null);
   const [formData, setFormData] = useState({
@@ -19,15 +22,15 @@ const AdminStudentManagement = () => {
   }, []);
 
   const loadStudents = async () => {
+    listView.start();
     try {
-      setLoading(true);
       const response = await adminService.getStudents(0, 100);
-      setStudents(response.items || []);
-      setError(null);
+      const items = response.items || [];
+      setStudents(items);
+      listView.succeed(items);
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to load students');
-    } finally {
-      setLoading(false);
+      setStudents([]);
+      await listView.fail(err, 'Failed to load students');
     }
   };
 
@@ -44,7 +47,8 @@ const AdminStudentManagement = () => {
       resetForm();
       loadStudents();
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to save student');
+      const failure = await interpretApiError(err, 'Failed to save student');
+      setActionError(failure.kind === 'denied' ? `Permission denied. ${failure.message}` : failure.message);
     }
   };
 
@@ -67,7 +71,8 @@ const AdminStudentManagement = () => {
       await adminService.deleteStudent(studentId);
       loadStudents();
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to delete student');
+      const failure = await interpretApiError(err, 'Failed to delete student');
+      setActionError(failure.kind === 'denied' ? `Permission denied. ${failure.message}` : failure.message);
     }
   };
 
@@ -78,10 +83,6 @@ const AdminStudentManagement = () => {
     });
   };
 
-  if (loading) {
-    return <div className="text-center py-8">Loading students...</div>;
-  }
-
   return (
     <div>
       <div className="flex justify-between items-center mb-6">
@@ -91,9 +92,9 @@ const AdminStudentManagement = () => {
         </Button>
       </div>
 
-      {error && (
-        <div className="mb-4 p-4 bg-red-50 border border-red-200 text-red-700 rounded">
-          {error}
+      {actionError && (
+        <div className="mb-4 p-4 bg-red-50 border border-red-200 text-red-700 rounded" role="alert">
+          {actionError}
         </div>
       )}
 
@@ -143,13 +144,21 @@ const AdminStudentManagement = () => {
         </Card>
       )}
 
+      <DataState
+        status={listView.status}
+        message={listView.message}
+        onRetry={loadStudents}
+        loading={<div className="text-center py-8">Loading students...</div>}
+        empty={(
+          <EmptyState
+            icon="students"
+            title="No student profiles yet"
+            description="Add a student profile for an existing user account before enrolling them in a course."
+          />
+        )}
+      >
       <div className="grid gap-4">
-        {students.length === 0 ? (
-          <Card>
-            <p className="text-center text-gray-500 py-8">No students found</p>
-          </Card>
-        ) : (
-          students.map((student) => (
+          {students.map((student) => (
             <Card key={student.id}>
               <div className="flex justify-between items-start">
                 <div className="flex-1">
@@ -181,9 +190,9 @@ const AdminStudentManagement = () => {
                 </div>
               </div>
             </Card>
-          ))
-        )}
+          ))}
       </div>
+      </DataState>
     </div>
   );
 };

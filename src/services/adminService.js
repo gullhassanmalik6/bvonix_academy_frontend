@@ -31,6 +31,11 @@ export const adminService = {
     return response.data;
   },
 
+  async createUser(data) {
+    const response = await api.post('/admin/users', data);
+    return response.data;
+  },
+
   async updateUser(userId, data) {
     const response = await api.patch(`/admin/users/${userId}`, data);
     return response.data;
@@ -95,6 +100,13 @@ export const adminService = {
 
   async verifyEnrollment(enrollmentId) {
     const response = await api.patch(`/admin/enrollments/${enrollmentId}/verify`);
+    return response.data;
+  },
+
+  async transitionEnrollment(enrollmentId, workflowState) {
+    const response = await api.post(`/admin/enrollments/${enrollmentId}/transition`, {
+      workflow_state: workflowState,
+    });
     return response.data;
   },
 
@@ -291,6 +303,21 @@ export const adminService = {
 
   async updatePayment(paymentId, data) {
     const response = await api.patch(`/admin/payments/${paymentId}`, data);
+    return response.data;
+  },
+
+  async getAuditLogs(skip = 0, limit = 50) {
+    const response = await api.get('/admin/audit-logs', { params: { skip, limit } });
+    return response.data;
+  },
+
+  async getAttendanceSummary() {
+    const response = await api.get('/admin/attendance/summary');
+    return response.data;
+  },
+
+  async getCertificateSummary() {
+    const response = await api.get('/admin/certificates/summary');
     return response.data;
   },
 };

@@ -4,15 +4,17 @@ import CardWrapper from '../components/cards/CardWrapper';
 import Button from '../components/common/Button';
 import { cardService } from '../services/cardService';
 import { downloadCardPreviewPdf } from '../utils/cardPreviewPdf';
-import { getApiErrorMessage } from '../services/api';
+import { getApiErrorMessage, interpretApiError } from '../services/api';
+import { DataState } from '../components/common/DataState';
 import { CARD_PREVIEW_SCALE, defaultCardData } from '../components/cards/cardTheme';
 import { useToast } from '../context/ToastContext';
 
 export default function CardPrintPreview() {
   const { enrollmentId } = useParams();
   const { showToast } = useToast();
-  const [cardData, setCardData] = useState(defaultCardData);
+  const [cardData, setCardData] = useState(enrollmentId ? null : defaultCardData);
   const [loading, setLoading] = useState(Boolean(enrollmentId));
+  const [loadFailure, setLoadFailure] = useState(null);
   const [downloading, setDownloading] = useState(false);
   const [scale, setScale] = useState(CARD_PREVIEW_SCALE);
 
@@ -40,6 +42,7 @@ export default function CardPrintPreview() {
         setLoading(true);
         const data = await cardService.getPreviewData(enrollmentId);
         if (!cancelled) {
+          setLoadFailure(null);
           setCardData({
             academyName: data.academyName,
             studentName: data.studentName,
@@ -65,7 +68,8 @@ export default function CardPrintPreview() {
         }
       } catch (err) {
         if (!cancelled) {
-          showToast(await getApiErrorMessage(err, 'Failed to load card preview'), 'error');
+          setCardData(null);
+          setLoadFailure(await interpretApiError(err, 'Failed to load card preview'));
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -122,6 +126,11 @@ export default function CardPrintPreview() {
       <main className="print-area w-full overflow-x-auto px-4 py-10 flex justify-center">
         {loading ? (
           <p className="text-slate-500">Loading card…</p>
+        ) : loadFailure ? (
+          <DataState
+            status={loadFailure.kind === 'denied' ? 'denied' : 'error'}
+            message={loadFailure.message}
+          />
         ) : (
           <CardWrapper data={cardData} scale={scale} layout="horizontal" showBothSides />
         )}

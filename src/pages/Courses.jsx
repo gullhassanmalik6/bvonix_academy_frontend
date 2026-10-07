@@ -4,7 +4,8 @@ import { siteSettingsService } from '../services/siteSettingsService';
 import { useAuth } from '../context/AuthContext';
 import CourseCatalogCard from '../components/courses/CourseCatalogCard';
 import { getCourseCardTheme } from '../utils/courseCardTheme';
-import Button from '../components/common/Button';
+import { ErrorState, PermissionDenied } from '../components/common/DataState';
+import { interpretApiError } from '../services/api';
 import EnrollButton from '../components/common/EnrollButton';
 
 const CatalogSkeleton = () => (
@@ -16,11 +17,11 @@ const CatalogSkeleton = () => (
 );
 
 const Courses = () => {
-  const { isAuthenticated, isAdmin } = useAuth();
+  const { isAuthenticated, canAccessAdmin } = useAuth();
   const [courses, setCourses] = useState([]);
   const [subjectItems, setSubjectItems] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [failure, setFailure] = useState(null);
   const [publishedOnly, setPublishedOnly] = useState(true);
 
   useEffect(() => {
@@ -41,10 +42,10 @@ const Courses = () => {
       if (publishedOnly) params.published_only = true;
       const response = await courseService.getCourses(params);
       setCourses(response.items || []);
-      setError(null);
+      setFailure(null);
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to load courses.');
-      console.error('Courses error:', err);
+      setCourses([]);
+      setFailure(await interpretApiError(err, 'Failed to load courses.'));
     } finally {
       setLoading(false);
     }
@@ -63,15 +64,10 @@ const Courses = () => {
     );
   }
 
-  if (error) {
-    return (
-      <div className="text-center py-16">
-        <p className="text-red-600 mb-4">{error}</p>
-        <Button onClick={loadCourses} variant="primary">
-          Try Again
-        </Button>
-      </div>
-    );
+  if (failure) {
+    return failure.kind === 'denied'
+      ? <PermissionDenied message={failure.message} />
+      : <ErrorState message={failure.message} onRetry={loadCourses} />;
   }
 
   return (
@@ -88,7 +84,7 @@ const Courses = () => {
           Practical, earning-focused tech education — from Python and web development to AI, freelancing, and remote work.
         </p>
 
-        {isAdmin && (
+        {canAccessAdmin && (
           <label className="inline-flex items-center gap-2 mt-6 text-sm text-gray-600 bg-gray-100 rounded-lg px-4 py-2 cursor-pointer">
             <input
               type="checkbox"
@@ -103,10 +99,12 @@ const Courses = () => {
 
       {courses.length === 0 ? (
         <div className="text-center py-16 rounded-2xl bg-gray-50 border border-gray-100">
-          <p className="text-gray-600 text-lg">No courses available at the moment.</p>
-          {!isAuthenticated && (
-            <p className="text-gray-500 text-sm mt-2">Check back soon or contact us for enrollment details.</p>
-          )}
+          <p className="text-gray-900 text-lg font-medium">No courses are published yet.</p>
+          <p className="text-gray-500 text-sm mt-2">
+            {isAuthenticated
+              ? 'Check back after an administrator publishes a course, or open My Learning if you are already enrolled.'
+              : 'Check back soon, or create an account so you can enroll when a course opens.'}
+          </p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-10 pl-8 sm:pl-10">
@@ -115,7 +113,7 @@ const Courses = () => {
               key={course.id}
               course={course}
               theme={getCourseCardTheme(course, index, subjectItems)}
-              showAdminMeta={isAdmin}
+              showAdminMeta={canAccessAdmin}
             />
           ))}
         </div>

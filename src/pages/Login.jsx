@@ -53,7 +53,7 @@ const Login = () => {
 
     if (result.success) {
       // Redirect admins to admin panel, regular users to dashboard
-      navigate(result.isAdmin ? '/admin' : '/dashboard');
+      navigate(result.canAccessAdmin ? '/admin' : '/dashboard');
     } else {
       setErrors({ submit: result.error });
     }
@@ -98,20 +98,12 @@ const Login = () => {
           </Button>
         </form>
 
-        <div className="mt-4 space-y-2">
-          <p className="text-center text-gray-600">
-            Don't have an account?{' '}
-            <Link to="/register" className="text-primary-600 hover:underline">
-              Sign up here
-            </Link>
-          </p>
-          <p className="text-center text-sm text-gray-500">
-            Admin?{' '}
-            <Link to="/admin/register" className="text-primary-600 hover:underline">
-              Register as admin
-            </Link>
-          </p>
-        </div>
+        <p className="mt-4 text-center text-gray-600">
+          Don't have an account?{' '}
+          <Link to="/register" className="text-primary-600 hover:underline">
+            Sign up here
+          </Link>
+        </p>
       </Card>
     </div>
   );

@@ -1,22 +1,31 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { settingsService } from '../services/settingsService';
-import DashboardLayout from '../components/layout/DashboardLayout';
+import StudentDashboardLayout from '../components/layout/StudentDashboardLayout';
 import Card from '../components/common/Card';
 import Button from '../components/common/Button';
 import Input from '../components/common/Input';
 import { FiUser, FiBell, FiLock, FiMail, FiSave, FiTrash2 } from 'react-icons/fi';
 import { FormSkeleton } from '../components/common/Skeleton';
+import { ErrorState, PermissionDenied } from '../components/common/DataState';
+import { interpretApiError } from '../services/api';
 
 const Settings = () => {
   const navigate = useNavigate();
   const { user, updateUser, logout } = useAuth();
   const toast = useToast();
-  const [activeTab, setActiveTab] = useState('profile');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requestedTab = searchParams.get('tab');
+  const [activeTab, setActiveTab] = useState(
+    requestedTab === 'notifications' || requestedTab === 'security' || requestedTab === 'profile'
+      ? requestedTab
+      : 'profile'
+  );
   const [loading, setLoading] = useState(false);
   const [loadingPreferences, setLoadingPreferences] = useState(true);
+  const [settingsFailure, setSettingsFailure] = useState(null);
   
   // Profile settings
   const [profileData, setProfileData] = useState({
@@ -47,13 +56,30 @@ const Settings = () => {
     loadSettings();
   }, []);
 
+  useEffect(() => {
+    const tab = searchParams.get('tab');
+    if (tab === 'profile' || tab === 'notifications' || tab === 'security') {
+      setActiveTab(tab);
+    }
+  }, [searchParams]);
+
+  const selectTab = (tab) => {
+    setActiveTab(tab);
+    if (tab === 'profile') {
+      setSearchParams({ tab: 'profile' }, { replace: true });
+    } else {
+      setSearchParams({}, { replace: true });
+    }
+  };
+
   const loadSettings = async () => {
     try {
       setLoadingPreferences(true);
       const [profileData, notificationPrefs] = await Promise.all([
-        settingsService.getProfile().catch(() => null),
-        settingsService.getNotificationPreferences().catch(() => null),
+        settingsService.getProfile(),
+        settingsService.getNotificationPreferences(),
       ]);
+      setSettingsFailure(null);
 
       if (profileData) {
         setProfileData({
@@ -73,16 +99,11 @@ const Settings = () => {
         });
       }
     } catch (error) {
-      console.error('Failed to load settings:', error);
+      setSettingsFailure(await interpretApiError(error, 'Failed to load settings'));
     } finally {
       setLoadingPreferences(false);
     }
   };
-
-  const menuItems = [
-    { id: 'dashboard', label: 'Dashboard', path: '/dashboard' },
-    { id: 'settings', label: 'Settings', path: '/settings', activeTab: 'settings' },
-  ];
 
   const handleProfileUpdate = async (e) => {
     e.preventDefault();
@@ -164,7 +185,7 @@ const Settings = () => {
   };
 
   return (
-    <DashboardLayout menuItems={menuItems} title="Settings">
+    <StudentDashboardLayout>
       <div className="max-w-4xl mx-auto">
         <div className="mb-8">
           <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-2">Settings</h1>
@@ -172,10 +193,10 @@ const Settings = () => {
         </div>
 
         {/* Tabs */}
-        <div className="flex space-x-1 mb-6 border-b border-gray-200">
+        <div className="flex gap-1 mb-6 border-b border-gray-200 overflow-x-auto">
           <button
-            onClick={() => setActiveTab('profile')}
-            className={`px-4 py-2 font-medium text-sm transition-colors ${
+            onClick={() => selectTab('profile')}
+            className={`shrink-0 min-h-11 px-4 py-2 font-medium text-sm transition-colors ${
               activeTab === 'profile'
                 ? 'text-blue-600 border-b-2 border-blue-600'
                 : 'text-gray-600 hover:text-gray-900'
@@ -185,8 +206,8 @@ const Settings = () => {
             Profile
           </button>
           <button
-            onClick={() => setActiveTab('notifications')}
-            className={`px-4 py-2 font-medium text-sm transition-colors ${
+            onClick={() => selectTab('notifications')}
+            className={`shrink-0 min-h-11 px-4 py-2 font-medium text-sm whitespace-nowrap transition-colors ${
               activeTab === 'notifications'
                 ? 'text-blue-600 border-b-2 border-blue-600'
                 : 'text-gray-600 hover:text-gray-900'
@@ -196,8 +217,8 @@ const Settings = () => {
             Notifications
           </button>
           <button
-            onClick={() => setActiveTab('security')}
-            className={`px-4 py-2 font-medium text-sm transition-colors ${
+            onClick={() => selectTab('security')}
+            className={`shrink-0 min-h-11 px-4 py-2 font-medium text-sm whitespace-nowrap transition-colors ${
               activeTab === 'security'
                 ? 'text-blue-600 border-b-2 border-blue-600'
                 : 'text-gray-600 hover:text-gray-900'
@@ -210,7 +231,11 @@ const Settings = () => {
 
         {/* Profile Tab */}
         {activeTab === 'profile' && (
-          loadingPreferences ? (
+          settingsFailure ? (
+            settingsFailure.kind === 'denied'
+              ? <PermissionDenied message={settingsFailure.message} />
+              : <ErrorState message={settingsFailure.message} onRetry={loadSettings} />
+          ) : loadingPreferences ? (
             <FormSkeleton />
           ) : (
           <Card>
@@ -268,7 +293,11 @@ const Settings = () => {
 
         {/* Notifications Tab */}
         {activeTab === 'notifications' && (
-          loadingPreferences ? (
+          settingsFailure ? (
+            settingsFailure.kind === 'denied'
+              ? <PermissionDenied message={settingsFailure.message} />
+              : <ErrorState message={settingsFailure.message} onRetry={loadSettings} />
+          ) : loadingPreferences ? (
             <FormSkeleton />
           ) : (
           <Card>
@@ -432,7 +461,7 @@ const Settings = () => {
           </Card>
         )}
       </div>
-    </DashboardLayout>
+    </StudentDashboardLayout>
   );
 };
 

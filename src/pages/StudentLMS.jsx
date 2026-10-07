@@ -1,24 +1,24 @@
 import { useState, useEffect } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { lmsService } from '../services/lmsService';
 import { downloadCardPreviewPdf, fetchPreviewCardData, openCardPreviewPdf } from '../utils/cardPreviewPdf';
 import { courseService } from '../services/courseService';
 import { siteSettingsService } from '../services/siteSettingsService';
-import { uploadService } from '../services/uploadService';
-import { getApiErrorMessage, getFileUrl } from '../services/api';
+import { getApiErrorMessage, getFileUrl, interpretApiError } from '../services/api';
+import { DataState, ErrorState, PermissionDenied } from '../components/common/DataState';
+import EnrollmentWizard from '../components/enrollment/EnrollmentWizard';
+import { enrollmentWorkflowState, nextExpectedAction } from '../enrollment/enrollmentWizard';
 import Card from '../components/common/Card';
 import Button from '../components/common/Button';
 import Input from '../components/common/Input';
 import CourseCatalogCard from '../components/courses/CourseCatalogCard';
 import { getCourseCardTheme } from '../utils/courseCardTheme';
-import DashboardLayout from '../components/layout/DashboardLayout';
-import { CardSkeleton, StatCardSkeleton, ListSkeleton, NotificationSkeleton } from '../components/common/Skeleton';
+import StudentDashboardLayout from '../components/layout/StudentDashboardLayout';
+import { lmsSectionTitle, lmsTabForSection } from '../navigation/studentNavigation';
+import { CardSkeleton, StatCardSkeleton } from '../components/common/Skeleton';
 
 const StudentLMS = () => {
-  const { user } = useAuth();
-  const toast = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState('dashboard');
   const [enrollments, setEnrollments] = useState([]);
@@ -31,51 +31,53 @@ const StudentLMS = () => {
   const [payments, setPayments] = useState([]);
   const [calendarEvents, setCalendarEvents] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [showEnrollmentModal, setShowEnrollmentModal] = useState(false);
-  const [selectedCourse, setSelectedCourse] = useState(null);
-  const [enrollmentFormData, setEnrollmentFormData] = useState({
-    class_type: 'online',
-    phone_number: '',
-    address: '',
-    father_guardian_name: '',
-    date_of_birth: '',
-    gender: '',
-    emergency_contact_name: '',
-    emergency_contact_phone: '',
-    profile_image_url: null,
-  });
-  const [profileImageFile, setProfileImageFile] = useState(null);
-  const [profileImagePreview, setProfileImagePreview] = useState(null);
+  const [failure, setFailure] = useState(null);
+  const [wizard, setWizard] = useState(null);
 
   useEffect(() => {
     loadData();
   }, []);
 
   useEffect(() => {
+    const section = searchParams.get('section');
+    if (!section) return;
+    const tab = lmsTabForSection(section);
+    const known = ['dashboard', 'enrollments', 'available', 'scholarships', 'assignments', 'sessions', 'materials', 'forum', 'announcements', 'performance', 'attendance', 'calendar', 'payments', 'certificates'];
+    if (known.includes(tab)) {
+      setActiveTab(tab);
+    }
+  }, [searchParams]);
+
+  useEffect(() => {
     const enrollCourseId = searchParams.get('enroll');
     if (enrollCourseId && courses.length > 0) {
       const course = courses.find((c) => c.id === enrollCourseId);
       if (course) {
-        setSelectedCourse(course);
-        setShowEnrollmentModal(true);
+        const existing = enrollments.find((item) => item.course_id === course.id) || null;
+        setWizard({ courseId: course.id, enrollment: existing });
         searchParams.delete('enroll');
         setSearchParams(searchParams, { replace: true });
       }
     }
-  }, [courses, searchParams, setSearchParams]);
+  }, [courses, enrollments, searchParams, setSearchParams]);
 
   const hasVerifiedEnrollment = enrollments.some((e) => e.verified_by_admin);
   useEffect(() => {
-    const restrictedTabs = ['dashboard', 'scholarships', 'assignments', 'sessions', 'materials', 'forum', 'announcements', 'performance', 'calendar', 'payments', 'certificates'];
+    if (loading) return;
+    const restrictedTabs = ['dashboard', 'scholarships', 'assignments', 'sessions', 'materials', 'forum', 'announcements', 'performance', 'attendance', 'calendar', 'payments', 'certificates'];
     if (!hasVerifiedEnrollment && restrictedTabs.includes(activeTab)) {
       setActiveTab('enrollments');
+      if (searchParams.get('section') && searchParams.get('section') !== 'enrollments' && searchParams.get('section') !== 'available') {
+        const next = new URLSearchParams(searchParams);
+        next.set('section', 'enrollments');
+        setSearchParams(next, { replace: true });
+      }
     }
-  }, [hasVerifiedEnrollment, activeTab]);
+  }, [hasVerifiedEnrollment, activeTab, loading, searchParams, setSearchParams]);
 
-  const loadData = async () => {
+  const loadData = async ({ silent = false } = {}) => {
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       const [enrollmentsData, coursesData] = await Promise.all([
         lmsService.getMyEnrollments(),
         courseService.getCourses({ skip: 0, limit: 100, published_only: true }),
@@ -99,9 +101,9 @@ const StudentLMS = () => {
           lmsService.getMyScholarships(),
           lmsService.getAnnouncements(),
           lmsService.getUpcomingSessions(),
-          lmsService.getPerformanceDashboard().catch(() => null),
+          lmsService.getPerformanceDashboard(),
           lmsService.getMyPayments(),
-          lmsService.getCalendarEvents().catch(() => []),
+          lmsService.getCalendarEvents(),
         ]);
         setCertificates(certificatesData || []);
         setScholarships(scholarshipsData || []);
@@ -119,174 +121,24 @@ const StudentLMS = () => {
         setPayments([]);
         setCalendarEvents([]);
       }
-      setError(null);
+      setFailure(null);
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to load data');
+      setFailure(await interpretApiError(err, 'Failed to load data'));
     } finally {
       setLoading(false);
     }
   };
 
-  const handleEnroll = async (courseId) => {
-    // Open enrollment modal for this course
-    const course = courses.find(c => c.id === courseId);
-    if (course) {
-      setSelectedCourse(course);
-      setShowEnrollmentModal(true);
-    }
+  const handleEnroll = (courseId) => {
+    const existing = enrollments.find((item) => item.course_id === courseId) || null;
+    setWizard({ courseId, enrollment: existing });
   };
 
-  const handleEnrollmentSubmit = async () => {
-    if (!selectedCourse) return;
-
-    // Validate required fields
-    if (!enrollmentFormData.class_type) {
-      toast.error('Please select a class type', { duration: 3000 });
-      return;
-    }
-
-    if (!enrollmentFormData.phone_number) {
-      toast.error('Please enter your phone number', { duration: 3000 });
-      return;
-    }
-
-    if (!enrollmentFormData.father_guardian_name?.trim()) {
-      toast.error('Please enter father / guardian name', { duration: 3000 });
-      return;
-    }
-
-    if (!enrollmentFormData.date_of_birth) {
-      toast.error('Please enter your date of birth', { duration: 3000 });
-      return;
-    }
-
-    if (!enrollmentFormData.gender) {
-      toast.error('Please select your gender', { duration: 3000 });
-      return;
-    }
-
-    if (!profileImageFile) {
-      toast.error('Please upload a passport-size profile photo', { duration: 3000 });
-      return;
-    }
-
-    if (enrollmentFormData.class_type === 'physical' && !enrollmentFormData.address) {
-      toast.error('Please enter your address for physical classes', { duration: 3000 });
-      return;
-    }
-
-    try {
-      // Upload profile image if provided
-      let profileImageUrl = null;
-      if (profileImageFile) {
-        try {
-          const uploadResponse = await uploadService.uploadProfileImage(profileImageFile);
-          profileImageUrl = uploadResponse.url || uploadResponse.file_url || uploadResponse.profile_image_url;
-        } catch (uploadError) {
-          console.error('Image upload failed:', uploadError);
-          toast.error('Failed to upload profile image. Please try again.', { duration: 4000 });
-          return;
-        }
-      }
-
-      // Prepare enrollment data
-      const enrollmentData = {
-        class_type: enrollmentFormData.class_type,
-        phone_number: enrollmentFormData.phone_number || null,
-        address: enrollmentFormData.address || null,
-        father_guardian_name: enrollmentFormData.father_guardian_name || null,
-        date_of_birth: enrollmentFormData.date_of_birth || null,
-        gender: enrollmentFormData.gender || null,
-        emergency_contact_name: enrollmentFormData.emergency_contact_name || null,
-        emergency_contact_phone: enrollmentFormData.emergency_contact_phone || null,
-        profile_image_url: profileImageUrl,
-        payment_status: 'pending',
-      };
-
-      await lmsService.enrollInCourse(selectedCourse.id, enrollmentData);
-      await loadData();
-      
-      // Reset form and close modal
-      setShowEnrollmentModal(false);
-      setSelectedCourse(null);
-      setEnrollmentFormData({
-        class_type: 'online',
-        phone_number: '',
-        address: '',
-        father_guardian_name: '',
-        date_of_birth: '',
-        gender: '',
-        emergency_contact_name: '',
-        emergency_contact_phone: '',
-        profile_image_url: null,
-      });
-      setProfileImageFile(null);
-      setProfileImagePreview(null);
-      
-      toast.success('Successfully enrolled in course!', { duration: 3000 });
-    } catch (err) {
-      console.error('Enrollment error:', err);
-      const errorMessage = err.response?.data?.detail || 
-                          err.response?.data?.message || 
-                          err.message || 
-                          'Failed to enroll. Please check your connection and try again.';
-      toast.error(errorMessage, { duration: 5000 });
-    }
-  };
-
-  const menuItems = hasVerifiedEnrollment
-    ? [
-        {
-          group: 'Overview',
-          items: [
-            { id: 'dashboard', label: 'Dashboard', onClick: () => setActiveTab('dashboard'), activeTab },
-          ]
-        },
-        {
-          group: 'Courses',
-          items: [
-            { id: 'enrollments', label: 'My Courses', onClick: () => setActiveTab('enrollments'), activeTab },
-            { id: 'available', label: 'Available Courses', onClick: () => setActiveTab('available'), activeTab },
-            { id: 'scholarships', label: 'Scholarships', onClick: () => setActiveTab('scholarships'), activeTab },
-          ]
-        },
-        {
-          group: 'Learning',
-          items: [
-            { id: 'assignments', label: 'Assignments', onClick: () => setActiveTab('assignments'), activeTab },
-            { id: 'sessions', label: 'Live Sessions', onClick: () => setActiveTab('sessions'), activeTab },
-            { id: 'materials', label: 'Course Materials', onClick: () => setActiveTab('materials'), activeTab },
-            { id: 'forum', label: 'Forum', onClick: () => setActiveTab('forum'), activeTab },
-          ]
-        },
-        {
-          group: 'Activities',
-          items: [
-            { id: 'announcements', label: 'Announcements', onClick: () => setActiveTab('announcements'), activeTab },
-            { id: 'performance', label: 'Performance', onClick: () => setActiveTab('performance'), activeTab },
-            { id: 'calendar', label: 'Calendar', onClick: () => setActiveTab('calendar'), activeTab },
-          ]
-        },
-        {
-          group: 'Account',
-          items: [
-            { id: 'payments', label: 'Payments', onClick: () => setActiveTab('payments'), activeTab },
-            { id: 'certificates', label: 'Certificates', onClick: () => setActiveTab('certificates'), activeTab },
-          ]
-        },
-      ]
-    : [
-        {
-          group: 'Enrollment',
-          items: [
-            { id: 'enrollments', label: 'My Enrollments', onClick: () => setActiveTab('enrollments'), activeTab },
-            { id: 'available', label: 'Available Courses', onClick: () => setActiveTab('available'), activeTab },
-          ]
-        },
-      ];
+  const sectionKey = searchParams.get('section') || activeTab;
+  const [pageTitle, pageSummary] = lmsSectionTitle(sectionKey);
 
   return (
-    <DashboardLayout menuItems={menuItems} title="LMS">
+    <StudentDashboardLayout>
       {loading ? (
         <div className="max-w-7xl mx-auto">
           <div className="mb-8">
@@ -306,17 +158,18 @@ const StudentLMS = () => {
           {/* Header */}
           <div className="mb-8">
             <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-2">
-              My LMS
+              {pageTitle}
             </h1>
             <p className="text-gray-600 text-lg">
-              Welcome back, <span className="text-blue-600 font-semibold">{user?.full_name || user?.email}</span>!
+              {pageSummary}
             </p>
           </div>
-          {error && (
-            <div className="mb-4 p-4 bg-red-50 border border-red-200 text-red-700 rounded">
-              {error}
-            </div>
-          )}
+          {failure ? (
+            failure.kind === 'denied'
+              ? <PermissionDenied message={failure.message} />
+              : <ErrorState message={failure.message} onRetry={() => loadData()} />
+          ) : (
+          <>
 
           {!hasVerifiedEnrollment && (
             <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-lg">
@@ -341,7 +194,11 @@ const StudentLMS = () => {
         )}
 
         {activeTab === 'enrollments' && (
-          <EnrollmentsTab enrollments={enrollments} courses={courses} />
+          <EnrollmentsTab
+            enrollments={enrollments}
+            courses={courses}
+            onContinue={(enrollment) => setWizard({ courseId: enrollment.course_id, enrollment })}
+          />
         )}
 
         {activeTab === 'available' && (
@@ -376,8 +233,8 @@ const StudentLMS = () => {
           <ForumTab enrollments={enrollments} courses={courses} />
         )}
 
-        {hasVerifiedEnrollment && activeTab === 'performance' && (
-          <PerformanceTab performance={performance} courses={courses} />
+        {hasVerifiedEnrollment && (activeTab === 'performance' || activeTab === 'attendance') && (
+          <PerformanceTab performance={performance} focus={activeTab} />
         )}
 
         {hasVerifiedEnrollment && activeTab === 'calendar' && (
@@ -391,29 +248,23 @@ const StudentLMS = () => {
         {hasVerifiedEnrollment && activeTab === 'certificates' && (
           <CertificatesTab certificates={certificates} courses={courses} />
         )}
+          </>
+          )}
 
           {/* Enrollment Modal */}
-          {showEnrollmentModal && selectedCourse && (
-            <EnrollmentModal
-              course={selectedCourse}
-              formData={enrollmentFormData}
-              setFormData={setEnrollmentFormData}
-              profileImageFile={profileImageFile}
-              setProfileImageFile={setProfileImageFile}
-              profileImagePreview={profileImagePreview}
-              setProfileImagePreview={setProfileImagePreview}
-              onClose={() => {
-                setShowEnrollmentModal(false);
-                setSelectedCourse(null);
-                setProfileImageFile(null);
-                setProfileImagePreview(null);
-              }}
-              onSubmit={handleEnrollmentSubmit}
+          {wizard && (
+            <EnrollmentWizard
+              courses={courses}
+              enrollments={enrollments}
+              initialCourseId={wizard.courseId}
+              initialEnrollment={wizard.enrollment}
+              onClose={() => setWizard(null)}
+              onUpdated={() => loadData({ silent: true })}
             />
           )}
         </div>
       )}
-    </DashboardLayout>
+    </StudentDashboardLayout>
   );
 };
 
@@ -627,6 +478,7 @@ const AssignmentsTab = ({ enrollments, courses }) => {
   const [selectedCourse, setSelectedCourse] = useState(null);
   const [assignments, setAssignments] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [failure, setFailure] = useState(null);
 
   useEffect(() => {
     if (selectedCourse) {
@@ -640,8 +492,10 @@ const AssignmentsTab = ({ enrollments, courses }) => {
       setLoading(true);
       const data = await lmsService.getCourseAssignments(selectedCourse);
       setAssignments(data || []);
+      setFailure(null);
     } catch (err) {
-      console.error('Failed to load assignments:', err);
+      setAssignments([]);
+      setFailure(await interpretApiError(err, 'Failed to load assignments'));
     } finally {
       setLoading(false);
     }
@@ -668,7 +522,7 @@ const AssignmentsTab = ({ enrollments, courses }) => {
         <select
           value={selectedCourse || ''}
           onChange={(e) => setSelectedCourse(e.target.value)}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="w-full min-h-11 text-base px-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
         >
           <option value="">-- Select a course --</option>
           {enrollments.map((enrollment) => {
@@ -685,9 +539,11 @@ const AssignmentsTab = ({ enrollments, courses }) => {
       {selectedCourse && (
         loading ? (
           <div className="text-center py-8">Loading assignments...</div>
+        ) : failure ? (
+          <DataState status={failure.kind === 'denied' ? 'denied' : 'error'} message={failure.message} onRetry={loadAssignments} />
         ) : assignments.length === 0 ? (
           <Card>
-            <p className="text-center text-gray-500 py-8">No assignments available for this course.</p>
+            <p className="text-center text-gray-500 py-8">No assignments have been published for this course yet.</p>
           </Card>
         ) : (
           <div className="space-y-4">
@@ -702,11 +558,12 @@ const AssignmentsTab = ({ enrollments, courses }) => {
 };
 
 // Assignment Card Component
-const AssignmentCard = ({ assignment, courseId }) => {
+const AssignmentCard = ({ assignment }) => {
+  const toast = useToast();
   const [submission, setSubmission] = useState(null);
   const [showSubmit, setShowSubmit] = useState(false);
   const [submissionText, setSubmissionText] = useState('');
-  const [fileUrls, setFileUrls] = useState([]);
+  const [fileUrls] = useState([]);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -745,9 +602,9 @@ const AssignmentCard = ({ assignment, courseId }) => {
     <Card>
       <div className="flex justify-between items-start mb-3">
         <div className="flex-1">
-          <h3 className="text-lg font-semibold text-gray-900">{assignment.title}</h3>
-          <p className="text-gray-600 text-sm mt-1">{assignment.description}</p>
-          <div className="flex items-center space-x-4 mt-3 text-sm text-gray-500">
+          <h3 className="text-lg font-semibold text-gray-900 break-words">{assignment.title}</h3>
+          <p className="text-gray-600 text-sm mt-1 break-words">{assignment.description}</p>
+          <div className="flex flex-wrap gap-x-4 gap-y-1 mt-3 text-sm text-gray-500">
             <span>Type: {assignment.assignment_type}</span>
             <span>Max Marks: {assignment.max_marks}</span>
             {assignment.due_date && (
@@ -798,7 +655,7 @@ const AssignmentCard = ({ assignment, courseId }) => {
             value={submissionText}
             onChange={(e) => setSubmissionText(e.target.value)}
             rows={5}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full min-h-11 text-base px-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             placeholder="Enter your submission..."
           />
           <div className="mt-4 flex space-x-2">
@@ -827,6 +684,7 @@ const SessionsTab = ({ enrollments, courses }) => {
   const [selectedCourse, setSelectedCourse] = useState(null);
   const [sessions, setSessions] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [failure, setFailure] = useState(null);
 
   useEffect(() => {
     if (selectedCourse) {
@@ -842,8 +700,10 @@ const SessionsTab = ({ enrollments, courses }) => {
       setLoading(true);
       const data = await lmsService.getCourseSessions(selectedCourse);
       setSessions(data || []);
+      setFailure(null);
     } catch (err) {
-      console.error('Failed to load sessions:', err);
+      setSessions([]);
+      setFailure(await interpretApiError(err, 'Failed to load sessions'));
     } finally {
       setLoading(false);
     }
@@ -854,8 +714,10 @@ const SessionsTab = ({ enrollments, courses }) => {
       setLoading(true);
       const data = await lmsService.getUpcomingSessions();
       setSessions(data || []);
+      setFailure(null);
     } catch (err) {
-      console.error('Failed to load upcoming sessions:', err);
+      setSessions([]);
+      setFailure(await interpretApiError(err, 'Failed to load upcoming sessions'));
     } finally {
       setLoading(false);
     }
@@ -874,7 +736,7 @@ const SessionsTab = ({ enrollments, courses }) => {
         <select
           value={selectedCourse || ''}
           onChange={(e) => setSelectedCourse(e.target.value || null)}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="w-full min-h-11 text-base px-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
         >
           <option value="">All Upcoming Sessions</option>
           {enrollments.map((enrollment) => {
@@ -890,9 +752,11 @@ const SessionsTab = ({ enrollments, courses }) => {
 
       {loading ? (
         <div className="text-center py-8">Loading sessions...</div>
+      ) : failure ? (
+        <DataState status={failure.kind === 'denied' ? 'denied' : 'error'} message={failure.message} onRetry={selectedCourse ? loadSessions : loadUpcoming} />
       ) : sessions.length === 0 ? (
         <Card>
-          <p className="text-center text-gray-500 py-8">No sessions available.</p>
+          <p className="text-center text-gray-500 py-8">No live classes are scheduled yet. Check again after your instructor adds a session.</p>
         </Card>
       ) : (
         <div className="space-y-4">
@@ -902,8 +766,8 @@ const SessionsTab = ({ enrollments, courses }) => {
             
             return (
               <Card key={session.id}>
-                <div className="flex justify-between items-start">
-                  <div className="flex-1">
+                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3">
+                  <div className="flex-1 min-w-0">
                     <h3 className="text-lg font-semibold text-gray-900">{session.title}</h3>
                     {course && <p className="text-sm text-gray-600 mt-1">Course: {course.title}</p>}
                     <div className="mt-3 space-y-1 text-sm text-gray-600">
@@ -960,6 +824,7 @@ const MaterialsTab = ({ enrollments, courses }) => {
   const [selectedCourse, setSelectedCourse] = useState(null);
   const [materials, setMaterials] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [failure, setFailure] = useState(null);
 
   useEffect(() => {
     if (selectedCourse) {
@@ -973,8 +838,10 @@ const MaterialsTab = ({ enrollments, courses }) => {
       setLoading(true);
       const data = await lmsService.getCourseMaterials(selectedCourse);
       setMaterials(data || []);
+      setFailure(null);
     } catch (err) {
-      console.error('Failed to load materials:', err);
+      setMaterials([]);
+      setFailure(await interpretApiError(err, 'Failed to load materials'));
     } finally {
       setLoading(false);
     }
@@ -1001,7 +868,7 @@ const MaterialsTab = ({ enrollments, courses }) => {
         <select
           value={selectedCourse || ''}
           onChange={(e) => setSelectedCourse(e.target.value)}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="w-full min-h-11 text-base px-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
         >
           <option value="">-- Select a course --</option>
           {enrollments.map((enrollment) => {
@@ -1018,9 +885,11 @@ const MaterialsTab = ({ enrollments, courses }) => {
       {selectedCourse && (
         loading ? (
           <div className="text-center py-8">Loading materials...</div>
+        ) : failure ? (
+          <DataState status={failure.kind === 'denied' ? 'denied' : 'error'} message={failure.message} onRetry={loadMaterials} />
         ) : materials.length === 0 ? (
           <Card>
-            <p className="text-center text-gray-500 py-8">No materials available for this course.</p>
+            <p className="text-center text-gray-500 py-8">No resources have been added for this course yet.</p>
           </Card>
         ) : (
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -1109,9 +978,11 @@ const AnnouncementsTab = ({ announcements, courses }) => {
 
 // Forum Tab Component
 const ForumTab = ({ enrollments, courses }) => {
+  const toast = useToast();
   const [selectedCourse, setSelectedCourse] = useState(null);
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [failure, setFailure] = useState(null);
   const [showCreate, setShowCreate] = useState(false);
   const [newPostTitle, setNewPostTitle] = useState('');
   const [newPostContent, setNewPostContent] = useState('');
@@ -1128,8 +999,10 @@ const ForumTab = ({ enrollments, courses }) => {
       setLoading(true);
       const data = await lmsService.getForumPosts(selectedCourse);
       setPosts(data || []);
+      setFailure(null);
     } catch (err) {
-      console.error('Failed to load forum posts:', err);
+      setPosts([]);
+      setFailure(await interpretApiError(err, 'Failed to load discussion'));
     } finally {
       setLoading(false);
     }
@@ -1184,7 +1057,7 @@ const ForumTab = ({ enrollments, courses }) => {
         <select
           value={selectedCourse || ''}
           onChange={(e) => setSelectedCourse(e.target.value)}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="w-full min-h-11 text-base px-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
         >
           <option value="">-- Select a course --</option>
           {enrollments.map((enrollment) => {
@@ -1227,6 +1100,8 @@ const ForumTab = ({ enrollments, courses }) => {
       {selectedCourse && (
         loading ? (
           <div className="text-center py-8">Loading forum posts...</div>
+        ) : failure ? (
+          <DataState status={failure.kind === 'denied' ? 'denied' : 'error'} message={failure.message} onRetry={loadPosts} />
         ) : posts.length === 0 ? (
           <Card>
             <p className="text-center text-gray-500 py-8">No forum posts yet. Be the first to ask a question!</p>
@@ -1246,7 +1121,7 @@ const ForumTab = ({ enrollments, courses }) => {
                   )}
                 </div>
                 <p className="text-gray-700 mt-2">{post.content}</p>
-                <div className="flex items-center space-x-4 mt-3 text-sm text-gray-500">
+                <div className="flex flex-wrap gap-x-4 gap-y-1 mt-3 text-sm text-gray-500">
                   <span>👁️ {post.views} views</span>
                   <span>👍 {post.upvotes}</span>
                   <span>💬 {post.reply_count} replies</span>
@@ -1268,11 +1143,57 @@ const ForumTab = ({ enrollments, courses }) => {
 };
 
 // Performance Tab Component
-const PerformanceTab = ({ performance, courses }) => {
+const PerformanceTab = ({ performance, focus = 'performance' }) => {
   if (!performance) {
     return (
       <Card>
-        <p className="text-center text-gray-500 py-8">Loading performance data...</p>
+        <p className="text-center text-gray-500 py-8">No performance has been recorded yet. Grades and attendance appear after they are saved.</p>
+      </Card>
+    );
+  }
+
+  if (focus === 'attendance') {
+    const entries = Object.entries(performance.attendance_summary || {});
+    if (entries.length === 0) {
+      return (
+        <Card>
+          <p className="text-center text-gray-500 py-8">No attendance has been recorded yet.</p>
+        </Card>
+      );
+    }
+
+    return (
+      <Card>
+        <h2 className="text-xl font-semibold mb-4">Attendance</h2>
+        <div className="space-y-3">
+          {entries.map(([courseId, summary]) => (
+            <div key={courseId} className="border rounded p-3">
+              <h3 className="font-medium text-gray-900 mb-2">{summary.course_title}</h3>
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 text-sm">
+                <div className="text-center">
+                  <div className="font-semibold text-green-600">{summary.present || 0}</div>
+                  <div className="text-gray-600">Present</div>
+                </div>
+                <div className="text-center">
+                  <div className="font-semibold text-red-600">{summary.absent || 0}</div>
+                  <div className="text-gray-600">Absent</div>
+                </div>
+                <div className="text-center">
+                  <div className="font-semibold text-yellow-600">{summary.late || 0}</div>
+                  <div className="text-gray-600">Late</div>
+                </div>
+                <div className="text-center">
+                  <div className="font-semibold text-blue-600">{summary.excused || 0}</div>
+                  <div className="text-gray-600">Excused</div>
+                </div>
+                <div className="text-center">
+                  <div className="font-semibold text-gray-900">{summary.percentage || 0}%</div>
+                  <div className="text-gray-600">Total</div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
       </Card>
     );
   }
@@ -1314,14 +1235,14 @@ const PerformanceTab = ({ performance, courses }) => {
           <div className="space-y-3">
             {performance.course_performance.map((course, idx) => (
               <div key={idx} className="border rounded p-4">
-                <div className="flex justify-between items-center mb-2">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-2">
                   <div className="flex-1">
                     <h3 className="font-medium text-gray-900">{course.course_title}</h3>
                     <p className="text-sm text-gray-600">
                       {course.total_assessments} assessments • Status: {course.enrollment_status}
                     </p>
                   </div>
-                  <div className="text-right ml-4">
+                  <div className="sm:text-right sm:ml-4">
                     <div className="text-2xl font-bold text-blue-600">{course.average_percentage}%</div>
                     <div className="text-sm text-gray-600">Grade: {course.final_grade}</div>
                   </div>
@@ -1347,42 +1268,6 @@ const PerformanceTab = ({ performance, courses }) => {
               <div key={grade} className="text-center p-3 border rounded">
                 <div className="text-2xl font-bold text-gray-900">{count}</div>
                 <div className="text-sm text-gray-600">{grade}</div>
-              </div>
-            ))}
-          </div>
-        </Card>
-      )}
-
-      {/* Attendance Summary */}
-      {performance.attendance_summary && Object.keys(performance.attendance_summary).length > 0 && (
-        <Card>
-          <h2 className="text-xl font-semibold mb-4">Attendance Summary</h2>
-          <div className="space-y-3">
-            {Object.entries(performance.attendance_summary).map(([courseId, summary]) => (
-              <div key={courseId} className="border rounded p-3">
-                <h3 className="font-medium text-gray-900 mb-2">{summary.course_title}</h3>
-                <div className="grid grid-cols-5 gap-2 text-sm">
-                  <div className="text-center">
-                    <div className="font-semibold text-green-600">{summary.present || 0}</div>
-                    <div className="text-gray-600">Present</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="font-semibold text-red-600">{summary.absent || 0}</div>
-                    <div className="text-gray-600">Absent</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="font-semibold text-yellow-600">{summary.late || 0}</div>
-                    <div className="text-gray-600">Late</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="font-semibold text-blue-600">{summary.excused || 0}</div>
-                    <div className="text-gray-600">Excused</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="font-semibold text-gray-900">{summary.percentage || 0}%</div>
-                    <div className="text-gray-600">Total</div>
-                  </div>
-                </div>
               </div>
             ))}
           </div>
@@ -1623,10 +1508,8 @@ const PaymentsTab = ({ payments, courses }) => {
 };
 
 // Enrollments Tab Component
-const EnrollmentsTab = ({ enrollments, courses }) => {
+const EnrollmentsTab = ({ enrollments, courses, onContinue }) => {
   const toast = useToast();
-  const [uploadingReceipt, setUploadingReceipt] = useState({});
-  const [receiptFile, setReceiptFile] = useState({});
   const [cardActionLoading, setCardActionLoading] = useState(null);
 
   const getCourseDetails = (courseId) => {
@@ -1663,29 +1546,6 @@ const EnrollmentsTab = ({ enrollments, courses }) => {
     }
   };
 
-  const handleReceiptUpload = async (enrollmentId) => {
-    const file = receiptFile[enrollmentId];
-    if (!file) {
-      toast.warning('Please select a payment receipt file');
-      return;
-    }
-
-    try {
-      setUploadingReceipt(prev => ({ ...prev, [enrollmentId]: true }));
-      // Upload receipt
-      const uploadResult = await uploadService.uploadPaymentReceipt(file);
-      // Update enrollment with receipt URL
-      await lmsService.uploadPaymentReceipt(enrollmentId, uploadResult.url);
-      setReceiptFile(prev => ({ ...prev, [enrollmentId]: null }));
-      toast.success('Payment receipt uploaded successfully! Admin will verify your payment.');
-      window.location.reload();
-    } catch (err) {
-      toast.error(err.response?.data?.message || 'Failed to upload payment receipt');
-    } finally {
-      setUploadingReceipt(prev => ({ ...prev, [enrollmentId]: false }));
-    }
-  };
-
   if (enrollments.length === 0) {
     return (
       <Card>
@@ -1706,7 +1566,7 @@ const EnrollmentsTab = ({ enrollments, courses }) => {
               <div className="flex-1">
                 <h3 className="text-xl font-semibold text-gray-900 mb-2">{course.title}</h3>
                 <p className="text-gray-600 mb-3 line-clamp-2">{course.description}</p>
-                <div className="flex items-center space-x-4 text-sm text-gray-500 mb-3">
+                <div className="flex flex-wrap items-center gap-2 mb-3 text-sm text-gray-500">
                   <span>Enrolled: {new Date(enrollment.enrollment_date).toLocaleDateString()}</span>
                   <span>Progress: {enrollment.progress_percentage.toFixed(0)}%</span>
                   <span className={`px-2 py-1 rounded text-xs font-medium ${
@@ -1736,28 +1596,15 @@ const EnrollmentsTab = ({ enrollments, courses }) => {
                   </div>
                 )}
 
-                {/* Payment Receipt Upload Section */}
-                {enrollment.payment_status === 'pending' && !enrollment.payment_receipt_url && (
+                {!['active', 'completed', 'cancelled', 'refunded'].includes(enrollmentWorkflowState(enrollment)) && (
                   <div className="mb-3 p-3 bg-yellow-50 border border-yellow-200 rounded">
-                    <p className="text-sm font-medium text-yellow-900 mb-2">
-                      Upload Payment Receipt
-                    </p>
-                    <div className="flex items-center space-x-2">
-                      <input
-                        type="file"
-                        accept="image/*,application/pdf"
-                        onChange={(e) => setReceiptFile(prev => ({ ...prev, [enrollment.id]: e.target.files[0] }))}
-                        className="flex-1 text-sm text-gray-500 file:mr-4 file:py-1 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
-                      />
-                      <Button
-                        onClick={() => handleReceiptUpload(enrollment.id)}
-                        disabled={uploadingReceipt[enrollment.id] || !receiptFile[enrollment.id]}
-                        className="bg-yellow-500 hover:bg-yellow-600 text-sm px-3 py-1"
-                      >
-                        {uploadingReceipt[enrollment.id] ? 'Uploading...' : 'Upload'}
-                      </Button>
-                    </div>
-                    <p className="text-xs text-yellow-700 mt-1">Upload receipt after completing payment (Image or PDF, max 10MB)</p>
+                    <p className="text-sm text-yellow-900 mb-2">{nextExpectedAction(enrollment)}</p>
+                    <Button
+                      onClick={() => onContinue(enrollment)}
+                      className="bg-yellow-500 hover:bg-yellow-600 text-sm px-3 py-1"
+                    >
+                      Continue enrollment
+                    </Button>
                   </div>
                 )}
 
@@ -1789,7 +1636,7 @@ const EnrollmentsTab = ({ enrollments, courses }) => {
                     <>
                       <Link
                         to={`/card-preview/${enrollment.id}`}
-                        className="inline-block bg-violet-600 hover:bg-violet-700 text-white text-sm px-3 py-1 rounded-lg text-center"
+                        className="inline-flex items-center justify-center min-h-11 bg-violet-600 hover:bg-violet-700 text-white text-sm px-3 rounded-lg text-center"
                       >
                         Preview Card
                       </Link>
@@ -1880,7 +1727,7 @@ const CertificatesTab = ({ certificates, courses }) => {
   if (certificates.length === 0) {
     return (
       <Card>
-        <p className="text-center text-gray-500 py-8">You don't have any certificates yet.</p>
+        <p className="text-center text-gray-500 py-8">You don't have any certificates yet. Finish a course and an administrator can issue one.</p>
       </Card>
     );
   }
@@ -1924,211 +1771,6 @@ const CertificatesTab = ({ certificates, courses }) => {
   );
 };
 
-// Enrollment Modal Component
-const EnrollmentModal = ({ course, formData, setFormData, profileImageFile, setProfileImageFile, profileImagePreview, setProfileImagePreview, onClose, onSubmit }) => {
-  const toast = useToast();
-  
-  const handleImageChange = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      // Validate file type
-      if (!file.type.startsWith('image/')) {
-        toast.warning('Please select an image file', { duration: 3000 });
-        return;
-      }
-      // Validate file size (5MB)
-      if (file.size > 5 * 1024 * 1024) {
-        toast.warning('Image size should be less than 5MB', { duration: 3000 });
-        return;
-      }
-      setProfileImageFile(file);
-      // Create preview
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setProfileImagePreview(reader.result);
-      };
-      reader.readAsDataURL(file);
-    }
-  };
 
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <Card className="max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="text-2xl font-bold text-gray-900">Enroll in {course.title}</h2>
-          <button
-            onClick={onClose}
-            className="text-gray-500 hover:text-gray-700 text-2xl"
-          >
-            ×
-          </button>
-        </div>
-
-        <div className="space-y-4">
-          <div>
-            <label htmlFor="enrollment-profile-image" className="block text-sm font-medium text-gray-700 mb-2">
-              Profile Image (Passport Size) <span className="text-red-500">*</span>
-            </label>
-            <div className="flex items-center space-x-4">
-              {profileImagePreview && (
-                <div className="w-24 h-24 border-2 border-gray-300 rounded overflow-hidden">
-                  <img src={profileImagePreview} alt="Profile preview" className="w-full h-full object-cover" />
-                </div>
-              )}
-              <div className="flex-1">
-                <input
-                  id="enrollment-profile-image"
-                  name="enrollment-profile-image"
-                  type="file"
-                  accept="image/*"
-                  onChange={handleImageChange}
-                  className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
-                />
-                <p className="text-xs text-gray-500 mt-1">Upload passport size photo (JPEG, PNG, max 5MB)</p>
-              </div>
-            </div>
-          </div>
-
-          <div>
-            <label htmlFor="enrollment-class-type" className="block text-sm font-medium text-gray-700 mb-2">
-              Class Type <span className="text-red-500">*</span>
-            </label>
-            <select
-              id="enrollment-class-type"
-              name="enrollment-class-type"
-              value={formData.class_type}
-              onChange={(e) => setFormData({ ...formData, class_type: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="online">Online</option>
-              <option value="physical">Physical</option>
-            </select>
-          </div>
-
-          <div>
-            <Input
-              type="tel"
-              name="enrollment-phone-number"
-              label="Phone Number"
-              value={formData.phone_number}
-              onChange={(e) => setFormData({ ...formData, phone_number: e.target.value })}
-              placeholder="Enter your phone number"
-              required
-            />
-          </div>
-
-          <div>
-            <Input
-              type="text"
-              name="enrollment-father-guardian"
-              label="Father / Guardian Name"
-              value={formData.father_guardian_name}
-              onChange={(e) => setFormData({ ...formData, father_guardian_name: e.target.value })}
-              placeholder="Enter father or guardian full name"
-              required
-            />
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label htmlFor="enrollment-dob" className="block text-sm font-medium text-gray-700 mb-2">
-                Date of Birth <span className="text-red-500">*</span>
-              </label>
-              <input
-                id="enrollment-dob"
-                name="enrollment-dob"
-                type="date"
-                value={formData.date_of_birth}
-                onChange={(e) => setFormData({ ...formData, date_of_birth: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                required
-              />
-            </div>
-            <div>
-              <label htmlFor="enrollment-gender" className="block text-sm font-medium text-gray-700 mb-2">
-                Gender <span className="text-red-500">*</span>
-              </label>
-              <select
-                id="enrollment-gender"
-                name="enrollment-gender"
-                value={formData.gender}
-                onChange={(e) => setFormData({ ...formData, gender: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                required
-              >
-                <option value="">Select gender</option>
-                <option value="Male">Male</option>
-                <option value="Female">Female</option>
-                <option value="Other">Other</option>
-              </select>
-            </div>
-          </div>
-
-          {formData.class_type === 'physical' && (
-            <div>
-              <label htmlFor="enrollment-address" className="block text-sm font-medium text-gray-700 mb-2">
-                Address <span className="text-red-500">*</span>
-              </label>
-              <textarea
-                id="enrollment-address"
-                name="enrollment-address"
-                value={formData.address}
-                onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                rows={3}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="Enter your full address"
-                required
-              />
-            </div>
-          )}
-
-          <div>
-            <Input
-              type="text"
-              name="enrollment-emergency-contact-name"
-              label="Emergency Contact Name"
-              value={formData.emergency_contact_name}
-              onChange={(e) => setFormData({ ...formData, emergency_contact_name: e.target.value })}
-              placeholder="Emergency contact name (optional)"
-            />
-          </div>
-
-          <div>
-            <Input
-              type="tel"
-              name="enrollment-emergency-contact-phone"
-              label="Emergency Contact Phone"
-              value={formData.emergency_contact_phone}
-              onChange={(e) => setFormData({ ...formData, emergency_contact_phone: e.target.value })}
-              placeholder="Emergency contact phone (optional)"
-            />
-          </div>
-
-          <div className="bg-blue-50 border border-blue-200 rounded p-3">
-            <p className="text-sm text-blue-800">
-              <strong>Note:</strong> Father/guardian name, date of birth, and gender are printed on your enrollment card.
-              After enrollment, complete payment — once verified by admin you can download your card.
-            </p>
-          </div>
-
-          <div className="flex space-x-3 pt-4">
-            <Button
-              onClick={onSubmit}
-              className="flex-1 bg-blue-500 hover:bg-blue-600"
-            >
-              Enroll Now
-            </Button>
-            <Button
-              onClick={onClose}
-              className="bg-gray-500 hover:bg-gray-600"
-            >
-              Cancel
-            </Button>
-          </div>
-        </div>
-      </Card>
-    </div>
-  );
-};
 
 export default StudentLMS;

@@ -1,12 +1,15 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { searchService } from '../../services/searchService';
+import { interpretApiError } from '../../services/api';
+import { DataState } from './DataState';
 import { FiSearch, FiX, FiBook, FiUser, FiFileText } from 'react-icons/fi';
 
 const SearchModal = ({ isOpen, onClose }) => {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [searchFailure, setSearchFailure] = useState(null);
   const [recentSearches, setRecentSearches] = useState([]);
   const inputRef = useRef(null);
   const navigate = useNavigate();
@@ -50,6 +53,7 @@ const SearchModal = ({ isOpen, onClose }) => {
       }));
 
       setResults(mappedResults);
+      setSearchFailure(null);
       
       // Save to recent searches
       if (searchQuery.trim()) {
@@ -63,9 +67,8 @@ const SearchModal = ({ isOpen, onClose }) => {
         });
       }
     } catch (error) {
-      console.error('Search error:', error);
       setResults([]);
-      // Show error state - could add toast here if needed
+      setSearchFailure(await interpretApiError(error, 'Search failed'));
     } finally {
       setLoading(false);
     }
@@ -167,6 +170,12 @@ const SearchModal = ({ isOpen, onClose }) => {
                 <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-primary-500"></div>
                 <p className="mt-2">Searching...</p>
               </div>
+            ) : searchFailure ? (
+              <DataState
+                status={searchFailure.kind === 'denied' ? 'denied' : 'error'}
+                message={searchFailure.message}
+                onRetry={() => handleSearch(query)}
+              />
             ) : query.trim() ? (
               results.length > 0 ? (
                 <div className="space-y-2">
@@ -194,7 +203,7 @@ const SearchModal = ({ isOpen, onClose }) => {
                 <div className="text-center py-8 text-gray-500">
                   <FiSearch className="w-12 h-12 mx-auto mb-2 text-gray-300" />
                   <p>No results found</p>
-                  <p className="text-sm mt-1">Try a different search term</p>
+                  <p className="text-sm mt-1">Try a different course, student, or page name.</p>
                 </div>
               )
             ) : (

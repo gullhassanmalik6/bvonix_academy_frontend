@@ -9,7 +9,25 @@ import Card from '../components/common/Card';
 import Button from '../components/common/Button';
 import Input from '../components/common/Input';
 import Breadcrumb from '../components/common/Breadcrumb';
+import StudentDashboardLayout from '../components/layout/StudentDashboardLayout';
 import { CardSkeleton, ListSkeleton } from '../components/common/Skeleton';
+import { ErrorState, PermissionDenied } from '../components/common/DataState';
+import { interpretApiError } from '../services/api';
+
+function blockedSection(failure, onRetry) {
+  if (!failure) return null;
+  return failure.kind === 'denied'
+    ? <PermissionDenied message={failure.message} />
+    : <ErrorState message={failure.message} onRetry={onRetry} />;
+}
+
+async function optionalRequest(promise, fallback) {
+  try {
+    return { data: await promise, failure: null };
+  } catch (error) {
+    return { data: undefined, failure: await interpretApiError(error, fallback) };
+  }
+}
 
 const CourseLMSDetail = () => {
   const { id } = useParams();
@@ -31,6 +49,7 @@ const CourseLMSDetail = () => {
   const [activeTab, setActiveTab] = useState('overview');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [sectionFailures, setSectionFailures] = useState({});
 
   useEffect(() => {
     loadCourseData();
@@ -60,16 +79,16 @@ const CourseLMSDetail = () => {
       ] = await Promise.all([
         courseService.getCourseById(id),
         lmsService.getMyEnrollments(),
-        lmsService.getMyResults(id).catch(() => []),
-        lmsService.getMyAttendance(id).catch(() => []),
-        lmsService.getAttendanceStats(id).catch(() => null),
-        lmsService.getCourseCertificate(id).catch(() => null),
-        lmsService.getCourseScholarships(id).catch(() => []),
-        lmsService.getCourseMaterials(id).catch(() => []),
-        lmsService.getCourseAssignments(id).catch(() => []),
-        lmsService.getCourseSessions(id).catch(() => []),
-        lmsService.getAnnouncements(id).catch(() => []),
-        lmsService.getForumPosts(id).catch(() => []),
+        optionalRequest(lmsService.getMyResults(id), 'Failed to load results'),
+        optionalRequest(lmsService.getMyAttendance(id), 'Failed to load attendance'),
+        optionalRequest(lmsService.getAttendanceStats(id), 'Failed to load attendance'),
+        optionalRequest(lmsService.getCourseCertificate(id), 'Failed to load the certificate'),
+        optionalRequest(lmsService.getCourseScholarships(id), 'Failed to load scholarships'),
+        optionalRequest(lmsService.getCourseMaterials(id), 'Failed to load lessons'),
+        optionalRequest(lmsService.getCourseAssignments(id), 'Failed to load assignments'),
+        optionalRequest(lmsService.getCourseSessions(id), 'Failed to load live classes'),
+        optionalRequest(lmsService.getAnnouncements(id), 'Failed to load announcements'),
+        optionalRequest(lmsService.getForumPosts(id), 'Failed to load discussion'),
       ]);
 
       setCourse(courseData);
@@ -80,23 +99,34 @@ const CourseLMSDetail = () => {
       if (courseData) {
         setBreadcrumbItems([
           { label: 'Dashboard', href: '/dashboard' },
-          { label: 'My LMS', href: '/lms' },
+          { label: 'My Courses', href: '/lms?section=enrollments' },
           { label: courseData.title, href: null }
         ]);
       }
-      setResults(resultsData || []);
-      setAttendance(attendanceData || []);
-      setAttendanceStats(statsData);
-      setCertificate(certData);
-      setScholarships(scholarshipsData || []);
-      setMaterials(materialsData || []);
-      setAssignments(assignmentsData || []);
-      setSessions(sessionsData || []);
-      setAnnouncements(announcementsData || []);
-      setForumPosts(forumPostsData || []);
+      setResults(resultsData.failure ? [] : (resultsData.data || []));
+      setAttendance(attendanceData.failure ? [] : (attendanceData.data || []));
+      setAttendanceStats(statsData.failure ? null : statsData.data);
+      setCertificate(certData.failure ? null : certData.data);
+      setScholarships(scholarshipsData.failure ? [] : (scholarshipsData.data || []));
+      setMaterials(materialsData.failure ? [] : (materialsData.data || []));
+      setAssignments(assignmentsData.failure ? [] : (assignmentsData.data || []));
+      setSessions(sessionsData.failure ? [] : (sessionsData.data || []));
+      setAnnouncements(announcementsData.failure ? [] : (announcementsData.data || []));
+      setForumPosts(forumPostsData.failure ? [] : (forumPostsData.data || []));
+      setSectionFailures({
+        results: resultsData.failure,
+        attendance: attendanceData.failure || statsData.failure,
+        certificate: certData.failure,
+        scholarships: scholarshipsData.failure,
+        materials: materialsData.failure,
+        assignments: assignmentsData.failure,
+        sessions: sessionsData.failure,
+        announcements: announcementsData.failure,
+        forum: forumPostsData.failure,
+      });
       setError(null);
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to load course data');
+      setError(await interpretApiError(err, 'Failed to load course data'));
     } finally {
       setLoading(false);
     }
@@ -104,34 +134,42 @@ const CourseLMSDetail = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <StudentDashboardLayout>
+        <div className="max-w-7xl mx-auto">
           <Breadcrumb />
           <CardSkeleton />
           <div className="mt-6">
             <ListSkeleton items={5} />
           </div>
         </div>
-      </div>
+      </StudentDashboardLayout>
     );
   }
 
   if (!course) {
     return (
-      <div className="min-h-screen bg-gray-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <StudentDashboardLayout>
+        <div className="max-w-7xl mx-auto">
           <Breadcrumb />
-          <p className="text-red-600">Course not found.</p>
-          <Button onClick={() => navigate('/lms')} className="mt-4">Back to LMS</Button>
+          {error?.kind === 'denied' ? (
+            <PermissionDenied message={error.message} />
+          ) : (
+            <ErrorState
+              title={error ? 'Could not load this course' : 'Course not available'}
+              message={error?.message || 'This course is not available. Return to My Courses and choose another course.'}
+              onRetry={error ? loadCourseData : undefined}
+            />
+          )}
+          <Button onClick={() => navigate('/lms?section=enrollments')} className="mt-4">Back to My Courses</Button>
         </div>
-      </div>
+      </StudentDashboardLayout>
     );
   }
 
   if (!enrollment || !enrollment.verified_by_admin) {
     return (
-      <div className="min-h-screen bg-gray-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <StudentDashboardLayout>
+        <div className="max-w-7xl mx-auto">
           <Breadcrumb />
           <Card>
             <div className="text-center py-8">
@@ -141,52 +179,53 @@ const CourseLMSDetail = () => {
                   ? 'Your enrollment is pending payment verification. Please upload your payment receipt and wait for admin verification to access course content.'
                   : 'You need to enroll in this course and have your payment verified by an admin before accessing LMS content.'}
               </p>
-              <Button onClick={() => navigate('/lms')}>Back to My LMS</Button>
+              <Button onClick={() => navigate('/lms?section=enrollments')}>Back to My Courses</Button>
             </div>
           </Card>
         </div>
-      </div>
+      </StudentDashboardLayout>
     );
   }
 
   const tabGroups = [
     { id: 'overview', label: 'Overview', items: [{ id: 'overview', label: 'Overview', icon: '📋' }] },
     { id: 'learning', label: 'Learning', items: [
-      { id: 'materials', label: 'Materials', icon: '📖' },
-      { id: 'sessions', label: 'Live Sessions', icon: '🎥' },
+      { id: 'materials', label: 'Lessons', icon: '📖' },
       { id: 'assignments', label: 'Assignments', icon: '📝' },
+      { id: 'resources', label: 'Resources', icon: '📄' },
+      { id: 'sessions', label: 'Live Classes', icon: '🎥' },
     ]},
-    { id: 'academic', label: 'Academic', items: [
-      { id: 'attendance', label: 'Attendance', icon: '✅' },
-      { id: 'results', label: 'Results', icon: '📊' },
-      { id: 'scholarship', label: 'Scholarship', icon: '🎓' },
-    ]},
-    { id: 'community', label: 'Community', items: [
+    { id: 'discussion', label: 'Discussion', items: [
+      { id: 'forum', label: 'Discussion', icon: '💬' },
       { id: 'announcements', label: 'Announcements', icon: '📢' },
-      { id: 'forum', label: 'Forum', icon: '💬' },
+    ]},
+    { id: 'progress', label: 'Progress', items: [
+      { id: 'results', label: 'Progress', icon: '📊' },
+      { id: 'attendance', label: 'Attendance', icon: '✅' },
     ]},
     { id: 'records', label: 'Records', items: [
       { id: 'certificate', label: 'Certificate', icon: '🏆' },
+      { id: 'scholarship', label: 'Scholarship', icon: '🎓' },
     ]},
   ];
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <StudentDashboardLayout>
+      <div className="max-w-7xl mx-auto">
         <Breadcrumb />
         {/* Course Header */}
         <Card className="mb-6">
-          <div className="flex justify-between items-start mb-4">
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900 mb-2">{course.title}</h1>
-              <p className="text-gray-600">{course.description}</p>
+          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3 mb-4">
+            <div className="min-w-0">
+              <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2 break-words">{course.title}</h1>
+              <p className="text-gray-600 break-words">{course.description}</p>
             </div>
-            <Button onClick={() => navigate('/lms')} className="bg-gray-500 hover:bg-gray-600">
-              Back
+            <Button onClick={() => navigate('/lms?section=enrollments')} className="bg-gray-500 hover:bg-gray-600 w-full sm:w-auto shrink-0">
+              My Courses
             </Button>
           </div>
           {enrollment && (
-            <div className="flex items-center space-x-4 text-sm">
+            <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
               <span>Status: <span className="font-semibold">{enrollment.status}</span></span>
               <span>Progress: <span className="font-semibold">{enrollment.progress_percentage?.toFixed?.(0) ?? 0}%</span></span>
               <span>Payment: <span className="font-semibold">{enrollment.payment_status}</span></span>
@@ -195,14 +234,33 @@ const CourseLMSDetail = () => {
         </Card>
 
         {error && (
-          <div className="mb-4 p-4 bg-red-50 border border-red-200 text-red-700 rounded">
-            {error}
-          </div>
+          error.kind === 'denied'
+            ? <PermissionDenied message={error.message} />
+            : <ErrorState message={error.message} onRetry={loadCourseData} />
         )}
 
         {/* Grouped LMS Navigation */}
         <div className="flex flex-col lg:flex-row gap-6">
-          <nav className="lg:w-56 flex-shrink-0">
+          <nav className="lg:hidden -mx-1" aria-label="Course sections">
+            <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+              {tabGroups.flatMap((group) => group.items).map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  aria-current={activeTab === tab.id ? 'page' : undefined}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`shrink-0 min-h-11 px-3 rounded-full text-sm font-medium border ${
+                    activeTab === tab.id
+                      ? 'bg-primary-500 text-white border-primary-500'
+                      : 'bg-white text-gray-700 border-gray-200'
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+          </nav>
+          <nav className="hidden lg:block lg:w-56 flex-shrink-0" aria-label="Course sections">
             <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
               {tabGroups.map((group) => (
                 <div key={group.id} className="border-b border-gray-100 last:border-b-0">
@@ -234,7 +292,10 @@ const CourseLMSDetail = () => {
           <div className="flex-1 min-w-0">
         {activeTab === 'overview' && (
           <Card>
-            <h2 className="text-2xl font-bold mb-4">Course Overview</h2>
+            <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+              <h2 className="text-2xl font-bold">Course Overview</h2>
+              <Button onClick={() => setActiveTab('materials')}>Open lessons</Button>
+            </div>
             <div className="space-y-4">
               <div>
                 <h3 className="font-semibold mb-2">Course Details</h3>
@@ -259,53 +320,69 @@ const CourseLMSDetail = () => {
         )}
 
         {activeTab === 'results' && (
-          <ResultsTab results={results} />
+          <ResultsTab results={results} failure={sectionFailures.results} onRetry={loadCourseData} />
         )}
 
         {activeTab === 'materials' && (
-          <MaterialsTab materials={materials} />
+          <MaterialsTab
+            materials={materials.filter((material) => material.material_type !== 'link' && material.material_type !== 'assignment_instruction')}
+            emptyMessage="No lessons have been added to this course yet. They appear here when an instructor publishes them."
+            failure={sectionFailures.materials}
+            onRetry={loadCourseData}
+          />
+        )}
+
+        {activeTab === 'resources' && (
+          <MaterialsTab
+            materials={materials.filter((material) => material.material_type === 'link' || material.material_type === 'assignment_instruction')}
+            emptyMessage="No resources have been added to this course yet. Links and assignment instructions show up here."
+            failure={sectionFailures.materials}
+            onRetry={loadCourseData}
+          />
         )}
 
         {activeTab === 'assignments' && (
-          <AssignmentsTab assignments={assignments} courseId={id} />
+          <AssignmentsTab assignments={assignments} courseId={id} failure={sectionFailures.assignments} onRetry={loadCourseData} />
         )}
 
         {activeTab === 'sessions' && (
-          <SessionsTab sessions={sessions} />
+          <SessionsTab sessions={sessions} failure={sectionFailures.sessions} onRetry={loadCourseData} />
         )}
 
         {activeTab === 'attendance' && (
-          <AttendanceTab attendance={attendance} stats={attendanceStats} courseId={id} />
+          <AttendanceTab attendance={attendance} stats={attendanceStats} courseId={id} failure={sectionFailures.attendance} onRetry={loadCourseData} />
         )}
 
         {activeTab === 'scholarship' && (
-          <ScholarshipTab scholarships={scholarships} />
+          <ScholarshipTab scholarships={scholarships} failure={sectionFailures.scholarships} onRetry={loadCourseData} />
         )}
 
         {activeTab === 'certificate' && (
-          <CertificateTab certificate={certificate} course={course} />
+          <CertificateTab certificate={certificate} course={course} failure={sectionFailures.certificate} onRetry={loadCourseData} />
         )}
 
         {activeTab === 'announcements' && (
-          <AnnouncementsTab announcements={announcements} />
+          <AnnouncementsTab announcements={announcements} failure={sectionFailures.announcements} onRetry={loadCourseData} />
         )}
 
         {activeTab === 'forum' && (
-          <ForumTab forumPosts={forumPosts} courseId={id} />
+          <ForumTab forumPosts={forumPosts} courseId={id} failure={sectionFailures.forum} onRetry={loadCourseData} />
         )}
           </div>
         </div>
       </div>
-    </div>
+    </StudentDashboardLayout>
   );
 };
 
 // Results Tab Component
-const ResultsTab = ({ results }) => {
+const ResultsTab = ({ results, failure, onRetry }) => {
+  const blocked = blockedSection(failure, onRetry);
+  if (blocked) return blocked;
   if (results.length === 0) {
     return (
       <Card>
-        <p className="text-center text-gray-500 py-8">No results available yet.</p>
+        <p className="text-center text-gray-500 py-8">No progress has been recorded for this course yet.</p>
       </Card>
     );
   }
@@ -352,11 +429,13 @@ const ResultsTab = ({ results }) => {
 };
 
 // Attendance Tab Component
-const AttendanceTab = ({ attendance, stats, courseId }) => {
+const AttendanceTab = ({ attendance, stats, failure, onRetry }) => {
   const toast = useToast();
   const [submittingReason, setSubmittingReason] = useState(null);
   const [reasonText, setReasonText] = useState('');
   const [loading, setLoading] = useState(false);
+  const blocked = blockedSection(failure, onRetry);
+  if (blocked) return blocked;
 
   const handleSubmitReason = async (attendanceId) => {
     if (!reasonText.trim()) {
@@ -391,7 +470,7 @@ const AttendanceTab = ({ attendance, stats, courseId }) => {
       {stats && (
         <Card>
           <h3 className="text-lg font-semibold mb-4">Attendance Statistics</h3>
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
             <div className="text-center">
               <p className="text-2xl font-bold text-green-600">{stats.present || 0}</p>
               <p className="text-sm text-gray-600">Present</p>
@@ -513,11 +592,13 @@ const AttendanceTab = ({ attendance, stats, courseId }) => {
 };
 
 // Materials Tab Component
-const MaterialsTab = ({ materials }) => {
+const MaterialsTab = ({ materials, emptyMessage = 'No course materials available yet.', failure, onRetry }) => {
+  const blocked = blockedSection(failure, onRetry);
+  if (blocked) return blocked;
   if (materials.length === 0) {
     return (
       <Card>
-        <p className="text-center text-gray-500 py-8">No course materials available yet.</p>
+        <p className="text-center text-gray-500 py-8">{emptyMessage}</p>
       </Card>
     );
   }
@@ -556,7 +637,7 @@ const MaterialsTab = ({ materials }) => {
 };
 
 // Assignments Tab Component
-const AssignmentsTab = ({ assignments, courseId }) => {
+const AssignmentsTab = ({ assignments, failure, onRetry }) => {
   const toast = useToast();
   const [submissions, setSubmissions] = useState({});
   const [showSubmit, setShowSubmit] = useState({});
@@ -565,7 +646,7 @@ const AssignmentsTab = ({ assignments, courseId }) => {
   const [loading, setLoading] = useState({});
 
   useEffect(() => {
-    // Load submissions for all assignments
+    if (failure) return;
     assignments.forEach(async (assignment) => {
       try {
         const submission = await lmsService.getMySubmission(assignment.id);
@@ -574,7 +655,10 @@ const AssignmentsTab = ({ assignments, courseId }) => {
         // No submission yet
       }
     });
-  }, [assignments]);
+  }, [assignments, failure]);
+
+  const blocked = blockedSection(failure, onRetry);
+  if (blocked) return blocked;
 
   const handleSubmit = async (assignmentId) => {
     const text = submissionText[assignmentId] || '';
@@ -632,7 +716,7 @@ const AssignmentsTab = ({ assignments, courseId }) => {
                 {assignment.instructions && (
                   <p className="text-sm text-gray-500 mb-2">Instructions: {assignment.instructions}</p>
                 )}
-                <div className="flex items-center space-x-4 text-sm text-gray-500 mb-3">
+                <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-gray-500 mb-3">
                   <span>Type: {assignment.assignment_type}</span>
                   <span>Max Marks: {assignment.max_marks}</span>
                   {assignment.due_date && (
@@ -719,7 +803,9 @@ const AssignmentsTab = ({ assignments, courseId }) => {
 };
 
 // Sessions Tab Component
-const SessionsTab = ({ sessions }) => {
+const SessionsTab = ({ sessions, failure, onRetry }) => {
+  const blocked = blockedSection(failure, onRetry);
+  if (blocked) return blocked;
   if (sessions.length === 0) {
     return (
       <Card>
@@ -790,7 +876,9 @@ const SessionsTab = ({ sessions }) => {
 };
 
 // Scholarship Tab Component
-const ScholarshipTab = ({ scholarships }) => {
+const ScholarshipTab = ({ scholarships, failure, onRetry }) => {
+  const blocked = blockedSection(failure, onRetry);
+  if (blocked) return blocked;
   if (scholarships.length === 0) {
     return (
       <Card>
@@ -881,7 +969,9 @@ const ScholarshipTab = ({ scholarships }) => {
 };
 
 // Certificate Tab Component
-const CertificateTab = ({ certificate, course }) => {
+const CertificateTab = ({ certificate, course, failure, onRetry }) => {
+  const blocked = blockedSection(failure, onRetry);
+  if (blocked) return blocked;
   if (!certificate) {
     return (
       <Card>
@@ -934,7 +1024,9 @@ const CertificateTab = ({ certificate, course }) => {
 };
 
 // Announcements Tab Component
-const AnnouncementsTab = ({ announcements }) => {
+const AnnouncementsTab = ({ announcements, failure, onRetry }) => {
+  const blocked = blockedSection(failure, onRetry);
+  if (blocked) return blocked;
   if (announcements.length === 0) {
     return (
       <Card>
@@ -994,7 +1086,7 @@ const AnnouncementsTab = ({ announcements }) => {
 };
 
 // Forum Tab Component
-const ForumTab = ({ forumPosts, courseId }) => {
+const ForumTab = ({ forumPosts, courseId, failure, onRetry }) => {
   const toast = useToast();
   const [showCreatePost, setShowCreatePost] = useState(false);
   const [newPostTitle, setNewPostTitle] = useState('');
@@ -1002,6 +1094,8 @@ const ForumTab = ({ forumPosts, courseId }) => {
   const [selectedPost, setSelectedPost] = useState(null);
   const [replies, setReplies] = useState({});
   const [loading, setLoading] = useState(false);
+  const blocked = blockedSection(failure, onRetry);
+  if (blocked) return blocked;
 
   const loadReplies = async (postId) => {
     try {
@@ -1112,11 +1206,11 @@ const ForumTab = ({ forumPosts, courseId }) => {
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
         <h2 className="text-2xl font-bold">Discussion Forum</h2>
         <Button
           onClick={() => setShowCreatePost(!showCreatePost)}
-          className="bg-blue-500 hover:bg-blue-600"
+          className="bg-blue-500 hover:bg-blue-600 w-full sm:w-auto"
         >
           {showCreatePost ? 'Cancel' : '+ New Post'}
         </Button>
@@ -1179,20 +1273,20 @@ const ForumTab = ({ forumPosts, courseId }) => {
                     )}
                   </div>
                   <p className="text-sm text-gray-600 line-clamp-2 mb-2">{post.content}</p>
-                  <div className="flex items-center space-x-4 text-sm text-gray-500">
+                  <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-gray-500">
                     <span>By: {post.author_name || 'Unknown'}</span>
                     <span>{new Date(post.created_at).toLocaleString()}</span>
                     <span>{post.reply_count || 0} replies</span>
                     <span>{post.views || 0} views</span>
                   </div>
                 </div>
-                <div className="flex flex-col items-center space-y-1 ml-4">
+                <div className="flex flex-col items-center ml-2 shrink-0">
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
                       handleVote(post.id, 'upvote');
                     }}
-                    className="text-blue-600 hover:text-blue-800"
+                    className="min-h-11 min-w-11 text-blue-600 hover:text-blue-800"
                   >
                     ▲ {post.upvotes || 0}
                   </button>
@@ -1201,7 +1295,7 @@ const ForumTab = ({ forumPosts, courseId }) => {
                       e.stopPropagation();
                       handleVote(post.id, 'downvote');
                     }}
-                    className="text-red-600 hover:text-red-800"
+                    className="min-h-11 min-w-11 text-red-600 hover:text-red-800"
                   >
                     ▼ {post.downvotes || 0}
                   </button>

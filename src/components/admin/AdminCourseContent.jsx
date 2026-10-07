@@ -1,5 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { adminService } from '../../services/adminService';
+import { interpretApiError } from '../../services/api';
+import { ErrorState, PermissionDenied } from '../common/DataState';
+import EmptyState from '../common/EmptyState';
 import { useToast } from '../../context/ToastContext';
 import Button from '../common/Button';
 import Card from '../common/Card';
@@ -32,12 +35,14 @@ function SelectField({ label, value, onChange, options }) {
   );
 }
 
-export default function AdminCourseContent() {
+export default function AdminCourseContent({ focus = null }) {
   const toast = useToast();
   const [courses, setCourses] = useState([]);
   const [selectedCourseId, setSelectedCourseId] = useState('');
   const [activeSubTab, setActiveSubTab] = useState('materials');
   const [loading, setLoading] = useState(true);
+  const [loadFailure, setLoadFailure] = useState(null);
+  const [coursesFailure, setCoursesFailure] = useState(null);
   const [items, setItems] = useState([]);
   const [instructors, setInstructors] = useState([]);
   const [showForm, setShowForm] = useState(false);
@@ -46,6 +51,8 @@ export default function AdminCourseContent() {
   const [selectedAssignmentId, setSelectedAssignmentId] = useState(null);
   const [gradeForm, setGradeForm] = useState({ marks: '', feedback: '' });
   const [formData, setFormData] = useState({});
+  const focusRef = useRef(focus);
+  focusRef.current = focus;
 
   useEffect(() => {
     (async () => {
@@ -56,17 +63,30 @@ export default function AdminCourseContent() {
         ]);
         const list = coursesData.items || [];
         setCourses(list);
+        setCoursesFailure(null);
         setInstructors(instructorsData.items || []);
-        if (list.length) setSelectedCourseId(list[0].id);
-      } catch {
-        toast.error('Failed to load courses');
+        const preferred = focus?.courseId;
+        if (preferred && list.some((course) => course.id === preferred)) {
+          setSelectedCourseId(preferred);
+          setActiveSubTab('assignments');
+        } else if (list.length) {
+          setSelectedCourseId(list[0].id);
+        }
+      } catch (err) {
+        setCourses([]);
+        setCoursesFailure(await interpretApiError(err, 'Failed to load courses'));
       }
     })();
-  }, [toast]);
+  }, [toast, focus?.courseId]);
 
   useEffect(() => {
     if (selectedCourseId) loadItems();
   }, [selectedCourseId, activeSubTab]);
+
+  useEffect(() => {
+    if (!focus?.submissionId || loading) return;
+    document.getElementById(`submission-${focus.submissionId}`)?.scrollIntoView({ block: 'center' });
+  }, [focus?.submissionId, loading, submissions]);
 
   async function loadItems() {
     if (!selectedCourseId) return;
@@ -79,9 +99,27 @@ export default function AdminCourseContent() {
       else if (activeSubTab === 'assignments') data = await adminService.getAssignments(selectedCourseId);
       else if (activeSubTab === 'sessions') data = await adminService.getSessions(selectedCourseId);
       else data = await adminService.getAnnouncements(0, 100, selectedCourseId);
-      setItems(data.items || []);
-    } catch {
+      const nextItems = data.items || [];
+      setItems(nextItems);
+      setLoadFailure(null);
+      const currentFocus = focusRef.current;
+      if (
+        activeSubTab === 'assignments'
+        && currentFocus?.assignmentId
+        && selectedCourseId === currentFocus.courseId
+      ) {
+        setSelectedAssignmentId(currentFocus.assignmentId);
+        try {
+          const subs = await adminService.getSubmissions(currentFocus.assignmentId);
+          setSubmissions(Array.isArray(subs) ? subs : []);
+        } catch (err) {
+          const failure = await interpretApiError(err, 'Failed to load submissions');
+          toast.error(failure.kind === 'denied' ? `Permission denied. ${failure.message}` : failure.message);
+        }
+      }
+    } catch (err) {
       setItems([]);
+      setLoadFailure(await interpretApiError(err, 'Failed to load course content'));
     } finally {
       setLoading(false);
     }
@@ -290,11 +328,27 @@ export default function AdminCourseContent() {
         </Card>
       )}
 
-      {loading ? <p className="text-center py-8 text-gray-500">Loading...</p> : items.length === 0 ? (
-        <Card><p className="text-center text-gray-500 py-8">No items yet for this course.</p></Card>
+      {coursesFailure ? (
+        coursesFailure.kind === 'denied'
+          ? <PermissionDenied message={coursesFailure.message} />
+          : <ErrorState message={coursesFailure.message} onRetry={() => window.location.reload()} />
+      ) : loadFailure ? (
+        loadFailure.kind === 'denied'
+          ? <PermissionDenied message={loadFailure.message} />
+          : <ErrorState message={loadFailure.message} onRetry={loadItems} />
+      ) : loading ? <p className="text-center py-8 text-gray-500">Loading...</p> : items.length === 0 ? (
+        <EmptyState
+          icon="courses"
+          title="Nothing in this section yet"
+          description="Create an item for this course when you are ready to publish it to students."
+        />
       ) : (
         <div className="space-y-3">{items.map((item) => (
-          <Card key={item.id}>
+          <Card
+            key={item.id}
+            id={`assignment-${item.id}`}
+            className={focus?.assignmentId === item.id ? 'ring-2 ring-blue-600' : ''}
+          >
             <div className="flex justify-between items-start gap-4">
               <div>
                 <h4 className="font-semibold">{item.title}</h4>
@@ -315,7 +369,11 @@ export default function AdminCourseContent() {
         <Card className="mt-6">
           <h3 className="text-lg font-semibold mb-4">Submissions</h3>
           {submissions.map((sub) => (
-            <div key={sub.id} className="border rounded p-4 mb-3">
+            <div
+              key={sub.id}
+              id={`submission-${sub.id}`}
+              className={`border rounded p-4 mb-3 ${focus?.submissionId === sub.id ? 'ring-2 ring-blue-600' : ''}`}
+            >
               <p className="text-sm">Student: {sub.student_id} | {sub.status}</p>
               {sub.submission_text && <p className="text-sm mt-2">{sub.submission_text}</p>}
               {sub.status !== 'graded' && (

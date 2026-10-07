@@ -1,6 +1,41 @@
 import React, { useState, useEffect } from 'react';
 import { siteSettingsService } from '../../services/siteSettingsService';
 
+const JOURNEY = [
+  { label: 'Learn', detail: 'Build the skill' },
+  { label: 'Practice', detail: 'Real projects' },
+  { label: 'Internship', detail: 'Apply it live' },
+  { label: 'Career', detail: 'Start earning' },
+];
+
+function CareerJourney() {
+  return (
+    <div className="relative w-full max-w-md aspect-[4/5] max-h-[450px] overflow-hidden rounded-[2rem] bg-[#0A1628] shadow-[0_18px_40px_rgba(10,22,40,0.18)]" aria-hidden="true">
+      <div className="absolute left-8 top-14 h-14 w-14 rounded-full border border-primary-500/40" />
+      <div className="absolute right-6 bottom-10 h-14 w-14 rounded-full bg-primary-500/15" />
+      <div className="absolute right-10 top-14 h-8 w-8 rotate-45 border border-white/20" />
+      <div className="absolute left-1/2 top-10 bottom-10 w-px -translate-x-1/2 bg-gradient-to-b from-transparent via-primary-400 to-transparent" />
+      <div className="relative z-10 flex h-full flex-col justify-center gap-4 px-8 py-10">
+        {JOURNEY.map((step, index) => (
+          <div
+            key={step.label}
+            className={`journey-float flex items-center gap-3 ${index % 2 === 0 ? 'self-start' : 'self-end'}`}
+            style={{ animationDelay: `${index * 0.45}s` }}
+          >
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary-500 text-sm font-bold text-white shadow-[0_8px_16px_rgba(229,57,53,0.35)]">
+              {index + 1}
+            </span>
+            <span className="rounded-2xl border border-white/10 bg-white px-4 py-2.5 shadow-[0_10px_24px_rgba(10,22,40,0.16)]">
+              <span className="block text-sm font-bold text-[#0A1628]">{step.label}</span>
+              <span className="block text-xs text-[#1F1F1F]/70">{step.detail}</span>
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 const CommunitySection = () => {
   const [settings, setSettings] = useState(null);
 
@@ -27,10 +62,6 @@ const CommunitySection = () => {
     );
   }
 
-  const imageUrl = settings.community_image_url
-    ? siteSettingsService.getHeroIconUrl(settings.community_image_url)
-    : 'https://images.unsplash.com/photo-1522202176988-66273c2fd55f?w=500&q=80';
-
   const stats = [
     { value: settings.community_stat1_value || '12 k', label: settings.community_stat1_label || 'Success Journey' },
     { value: settings.community_stat2_value || '98 +', label: settings.community_stat2_label || 'Best Mentor' },
@@ -41,23 +72,8 @@ const CommunitySection = () => {
     <section className="py-16 lg:py-24 bg-white overflow-hidden">
       <div className="container mx-auto px-4">
         <div className="flex flex-col lg:flex-row items-center gap-12 lg:gap-16">
-          {/* Left - Image with blob/circular background (screenshot style) */}
           <div className="flex-1 w-full lg:max-w-[50%] flex justify-center lg:justify-start order-2 lg:order-1">
-            <div className="relative w-full max-w-md">
-              <div className="relative w-full aspect-[4/5] max-h-[450px]">
-                <div className="absolute inset-0 bg-primary-500 rounded-[45%_55%_60%_40%/50%_45%_55%_50%] scale-110 -translate-x-4" />
-                <div className="absolute inset-0 flex items-center justify-center pl-4">
-                  <img
-                    src={imageUrl}
-                    alt={settings.community_image_alt || 'Community member with laptop'}
-                    className="relative z-10 w-[85%] h-[90%] object-cover object-top rounded-2xl shadow-xl"
-                    onError={(e) => {
-                      e.target.src = 'https://images.unsplash.com/photo-1522202176988-66273c2fd55f?w=500&q=80';
-                    }}
-                  />
-                </div>
-              </div>
-            </div>
+            <CareerJourney />
           </div>
 
           {/* Right - Text and stats */}

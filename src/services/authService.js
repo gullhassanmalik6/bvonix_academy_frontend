@@ -2,12 +2,9 @@ import api from './api';
 
 export const authService = {
   /**
-   * Register a new user
-   * Note: Regular users cannot register as admin via this method.
-   * Use AdminRegister page or create_admin.py script for admin accounts.
+   * Register a student account. Administrator accounts are created by an existing admin.
    */
   async register(data) {
-    // Remove role from data to ensure regular users can't set admin role
     const { role, ...userData } = data;
     const response = await api.post('/auth/register', userData);
     return response.data;

@@ -36,7 +36,7 @@
 
 @layer components {
   .btn {
-    @apply px-4 py-2 rounded-lg font-medium transition-colors duration-200;
+    @apply px-4 py-2 rounded-lg font-medium transition-colors duration-200 min-h-11 lg:min-h-0;
   }
   
   .btn-primary {
@@ -52,10 +52,144 @@
   }
   
   .input {
-    @apply w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#E53935] focus:border-transparent;
+    @apply w-full px-4 py-2 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-[#E53935] focus:border-transparent;
   }
   
   .card {
     @apply bg-white rounded-lg shadow-md p-6;
+  }
+}
+
+@keyframes journey-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+
+.journey-float {
+  animation: journey-float 5.5s ease-in-out infinite;
+}
+
+.milestone-dot {
+  position: absolute;
+  z-index: 2;
+  width: 28px;
+  height: 28px;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.milestone-shadow {
+  position: absolute;
+  left: 50%;
+  bottom: 1px;
+  width: 20px;
+  height: 7px;
+  border-radius: 999px;
+  background: rgba(10, 22, 40, 0.35);
+  filter: blur(1px);
+  transform: translateX(-50%);
+  transform-origin: center;
+}
+
+.milestone-sphere {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: radial-gradient(circle at 32% 28%, #6b6b6b 0%, #2a2a2a 18%, #111111 48%, #000000 100%);
+  box-shadow:
+    inset -5px -7px 8px rgba(0, 0, 0, 0.4),
+    inset 3px 3px 6px rgba(255, 255, 255, 0.85),
+    0 8px 10px rgba(10, 22, 40, 0.22);
+  transform: translateY(0);
+  transform-origin: center bottom;
+}
+
+.cta-depth {
+  transform: perspective(1000px) translateZ(0);
+}
+
+.depth-scene {
+  perspective: 1100px;
+  perspective-origin: center;
+}
+
+.depth-slab {
+  position: relative;
+  transform-style: preserve-3d;
+  border-radius: 28px;
+  transform: rotateX(2deg);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  will-change: transform;
+}
+
+.depth-slab-side {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 14px;
+  bottom: -10px;
+  border-radius: 28px;
+  background: linear-gradient(180deg, #243656 0%, #050a14 55%);
+  transform: translateZ(-12px);
+  box-shadow: 0 12px 20px rgba(0, 0, 0, 0.28);
+}
+
+.depth-slab-face {
+  position: relative;
+  overflow: hidden;
+  border-radius: 28px;
+  transform: translateZ(14px);
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  padding: 1rem 1.25rem;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.28),
+    0 16px 26px rgba(0, 0, 0, 0.28);
+}
+
+.depth-slab-highlight {
+  position: absolute;
+  left: 1.25rem;
+  right: 1.25rem;
+  top: 0;
+  height: 1px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.42);
+}
+
+.benefit-controls {
+  perspective: 800px;
+}
+
+.benefit-control {
+  transform: translateY(0);
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.22);
+  transition: transform 0.25s ease, box-shadow 0.25s ease, background-color 0.2s ease !important;
+}
+
+.benefit-control:hover {
+  transform: translateY(-10px) scale(1.05) !important;
+  box-shadow: 0 18px 28px rgba(0, 0, 0, 0.32) !important;
+}
+
+.benefit-control:active {
+  transform: translateY(-2px) scale(0.98) !important;
+  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.2) !important;
+}
+
+.cta-depth {
+  transition: transform 0.35s ease, box-shadow 0.35s ease;
+}
+
+.cta-depth:hover {
+  transform: translateY(-12px) scale(1.02);
+  box-shadow: 0 28px 56px rgba(10, 22, 40, 0.32), inset 0 1px 0 rgba(255, 255, 255, 0.18);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .journey-float,
+  .footer-link {
+    animation: none !important;
+    transition: none !important;
   }
 }

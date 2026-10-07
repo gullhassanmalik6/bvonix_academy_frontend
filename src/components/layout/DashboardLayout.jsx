@@ -74,8 +74,8 @@ const DashboardLayout = ({ children, menuItems = [], title = "Navigation", showL
           </>
         )}
 
-        {/* Main Content */}
-        <div className={`flex-1 transition-all duration-300 ${isCollapsed ? 'lg:ml-16' : 'lg:ml-64'}`}>
+        {/* Main Content. The sidebar is already in the flex row, so this column must not add another left margin. min-w-0 lets it shrink on a phone instead of being clipped. */}
+        <div className="flex-1 min-w-0 overflow-x-auto transition-all duration-300">
           <main className="p-4 sm:p-6 lg:p-8 bg-[#F5F5F5] min-h-full">
             <Breadcrumb />
             {children || <div className="text-gray-500 p-4">No content available</div>}

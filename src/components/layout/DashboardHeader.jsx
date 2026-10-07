@@ -1,8 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { adminRoleLabel } from '../../navigation/adminAccess';
 import SiteLogo from './SiteLogo';
 import { notificationService } from '../../services/notificationService';
+import { interpretApiError } from '../../services/api';
+import { DataState } from '../common/DataState';
 import SearchModal from '../common/SearchModal';
 import {
   FiSearch,
@@ -15,9 +18,11 @@ import {
 } from 'react-icons/fi';
 
 const DashboardHeader = ({ onMenuToggle }) => {
-  const { user, logout, isAdmin } = useAuth();
+  const { user, logout, canAccessAdmin } = useAuth();
+  const roleLabel = adminRoleLabel(user?.role);
   const navigate = useNavigate();
   const [notifications, setNotifications] = useState([]);
+  const [notificationFailure, setNotificationFailure] = useState(null);
   const [unreadCount, setUnreadCount] = useState(0);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
@@ -58,13 +63,16 @@ const DashboardHeader = ({ onMenuToggle }) => {
   const loadNotifications = async () => {
     try {
       const [notificationsData, unreadData] = await Promise.all([
-        notificationService.getNotifications(true, 10).catch(() => []),
-        notificationService.getUnreadCount().catch(() => ({ unread_count: 0 }))
+        notificationService.getNotifications(true, 10),
+        notificationService.getUnreadCount(),
       ]);
       setNotifications(notificationsData || []);
       setUnreadCount(unreadData?.unread_count || 0);
+      setNotificationFailure(null);
     } catch (error) {
-      console.error('Failed to load notifications:', error);
+      setNotifications([]);
+      setUnreadCount(0);
+      setNotificationFailure(await interpretApiError(error, 'Failed to load notifications'));
     }
   };
 
@@ -211,10 +219,19 @@ const DashboardHeader = ({ onMenuToggle }) => {
                     )}
                   </div>
                   <div className="max-h-96 overflow-y-auto">
-                    {notifications.length === 0 ? (
+                    {notificationFailure ? (
+                      <div className="p-4">
+                        <DataState
+                          status={notificationFailure.kind === 'denied' ? 'denied' : 'error'}
+                          message={notificationFailure.message}
+                          onRetry={loadNotifications}
+                        />
+                      </div>
+                    ) : notifications.length === 0 ? (
                       <div className="p-8 text-center text-gray-500">
                         <FiBell className="w-12 h-12 mx-auto mb-2 text-gray-300" />
                         <p>No notifications</p>
+                        <p className="text-sm mt-1">Announcements and alerts will show up here.</p>
                       </div>
                     ) : (
                       <div>
@@ -321,10 +338,10 @@ const DashboardHeader = ({ onMenuToggle }) => {
                   {notifications.length > 0 && (
                     <div className="p-3 border-t border-gray-200 text-center">
                       <button
-                        onClick={() => navigate('/lms')}
+                        onClick={() => navigate('/lms?section=announcements')}
                         className="text-sm text-primary-600 hover:text-primary-700"
                       >
-                        View all notifications
+                        View announcements
                       </button>
                     </div>
                   )}
@@ -349,7 +366,7 @@ const DashboardHeader = ({ onMenuToggle }) => {
                     {user?.full_name || 'User'}
                   </p>
                   <p className="text-xs text-gray-500">
-                    {isAdmin ? 'Administrator' : 'Student'}
+                    {roleLabel || 'Student'}
                   </p>
                 </div>
                 <FiChevronDown className={`w-4 h-4 text-gray-600 transition-transform hidden sm:block ${
@@ -369,16 +386,16 @@ const DashboardHeader = ({ onMenuToggle }) => {
                       {user?.full_name || user?.email}
                     </p>
                     <p className="text-xs text-gray-500 mt-1">{user?.email}</p>
-                    {isAdmin && (
-                      <span className="inline-block mt-2 px-2 py-1 bg-purple-100 text-purple-800 text-xs font-medium rounded" aria-label="Administrator">
-                        Admin
+                    {canAccessAdmin && roleLabel && (
+                      <span className="inline-block mt-2 px-2 py-1 bg-purple-100 text-purple-800 text-xs font-medium rounded">
+                        {roleLabel}
                       </span>
                     )}
                   </div>
                   <div className="py-1">
                     <button
                       onClick={() => {
-                        navigate('/dashboard');
+                        navigate('/settings?tab=profile');
                         setShowUserMenu(false);
                       }}
                       className="w-full flex items-center space-x-3 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"

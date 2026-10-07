@@ -4,8 +4,6 @@ import { useAuth } from '../../context/AuthContext';
 import { siteSettingsService } from '../../services/siteSettingsService';
 import {
   FiBell,
-  FiFileText,
-  FiMessageCircle,
   FiMoreVertical,
   FiPlus,
   FiUser,
@@ -33,23 +31,9 @@ const StudentDashboardRightSidebar = ({ mentors = [], enrollments = [] }) => {
   // Progress ring: ~75% complete
   const progressPercent = enrollments.length > 0
     ? Math.round(enrollments.reduce((a, e) => a + (e.progress_percentage || 0), 0) / enrollments.length)
-    : 75;
+    : 0;
 
-  // Bar chart: 4 vertical bars, each with 3 segments (darkest bottom, lightest top). Heights vary.
-  const chartBarHeights = enrollments.length >= 4
-    ? enrollments.slice(0, 4).map((e) => Math.min(100, (e.progress_percentage || 0)))
-    : [60, 80, 45, 90];
-
-  // Placeholder mentors when none from API
-  const displayMentors = mentors.length > 0
-    ? mentors
-    : [
-        { id: '1', name: 'Prashant Kumar Singh', specialization: 'Software Developer', course_id: null },
-        { id: '2', name: 'Prashant Kumar Singh', specialization: 'Software Developer', course_id: null },
-        { id: '3', name: 'Prashant Kumar Singh', specialization: 'Software Developer', course_id: null },
-        { id: '4', name: 'Prashant Kumar Singh', specialization: 'Software Developer', course_id: null },
-        { id: '5', name: 'Prashant Kumar Singh', specialization: 'Software Developer', course_id: null },
-      ];
+  const chartBarHeights = enrollments.slice(0, 4).map((e) => Math.min(100, (e.progress_percentage || 0)));
 
   return (
     <div className="p-5 space-y-8">
@@ -95,36 +79,37 @@ const StudentDashboardRightSidebar = ({ mentors = [], enrollments = [] }) => {
           {/* Action buttons - 4 icons: bell, square+plus, user, square (matches screenshot) */}
           <div className="flex gap-3 mt-4 justify-center">
             <button
-              onClick={() => navigate('/lms')}
+              onClick={() => navigate('/lms?section=announcements')}
               className="w-10 h-10 rounded-full border-2 border-gray-300 flex items-center justify-center text-gray-600 hover:border-gray-400 hover:bg-gray-50 transition-colors"
-              title="Notifications"
+              title="Announcements"
             >
               <FiBell className="w-5 h-5" />
             </button>
             <button
-              onClick={() => navigate('/lms')}
+              onClick={() => navigate('/lms?section=available')}
               className="w-10 h-10 rounded-full border-2 border-gray-300 flex items-center justify-center text-gray-600 hover:border-gray-400 hover:bg-gray-50 transition-colors"
-              title="Add"
+              title="Available courses"
             >
               <FiPlus className="w-5 h-5" />
             </button>
             <button
-              onClick={() => navigate('/profile')}
+              onClick={() => navigate('/settings?tab=profile')}
               className="w-10 h-10 rounded-full border-2 border-gray-300 flex items-center justify-center text-gray-600 hover:border-gray-400 hover:bg-gray-50 transition-colors"
               title="Profile"
             >
               <FiUser className="w-5 h-5" />
             </button>
             <button
-              onClick={() => navigate('/lms')}
+              onClick={() => navigate('/lms?section=enrollments')}
               className="w-10 h-10 rounded-full border-2 border-gray-300 flex items-center justify-center text-gray-600 hover:border-gray-400 hover:bg-gray-50 transition-colors"
-              title="Grid"
+              title="My courses"
             >
               <FiGrid className="w-5 h-5" />
             </button>
           </div>
 
           {/* Progress chart: 4 vertical bars, each subdivided into 3 shades (darkest bottom to lightest top) */}
+          {chartBarHeights.length > 0 && (
           <div className="w-full mt-5 flex items-end justify-between gap-3 h-16">
             {chartBarHeights.map((heightPercent, i) => (
               <div key={i} className="flex-1 flex flex-col justify-end h-full gap-px">
@@ -155,6 +140,7 @@ const StudentDashboardRightSidebar = ({ mentors = [], enrollments = [] }) => {
               </div>
             ))}
           </div>
+          )}
         </div>
       </div>
 
@@ -162,12 +148,19 @@ const StudentDashboardRightSidebar = ({ mentors = [], enrollments = [] }) => {
       <div>
         <div className="flex items-center justify-between mb-4">
           <h3 className="font-semibold text-gray-900 text-base">Your Mentor</h3>
-          <button className="w-8 h-8 rounded-full border border-gray-300 flex items-center justify-center text-gray-600 hover:bg-gray-50 transition-colors">
+          <button
+            onClick={() => navigate('/lms?section=available')}
+            className="w-8 h-8 rounded-full border border-gray-300 flex items-center justify-center text-gray-600 hover:bg-gray-50 transition-colors"
+            title="Browse courses"
+          >
             <FiPlus className="w-4 h-4" />
           </button>
         </div>
         <div className="space-y-4 max-h-72 overflow-y-auto">
-          {displayMentors.map((m) => (
+          {mentors.length === 0 && (
+            <p className="text-sm text-gray-500">Mentors appear here after you enroll in a course.</p>
+          )}
+          {mentors.map((m) => (
             <div key={m.id} className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden flex-shrink-0">
                 <span className="text-sm font-semibold text-gray-600">
@@ -188,7 +181,7 @@ const StudentDashboardRightSidebar = ({ mentors = [], enrollments = [] }) => {
           ))}
         </div>
         <button
-          onClick={() => navigate('/lms')}
+          onClick={() => navigate('/lms?section=enrollments')}
           className="w-full mt-4 py-2.5 rounded-lg bg-primary-400 text-white text-sm font-medium hover:bg-primary-500 transition-colors"
         >
           See All

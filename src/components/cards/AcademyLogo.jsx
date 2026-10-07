@@ -25,6 +25,9 @@ function resolveLogoSrc(logoUrl) {
  */
 export default function AcademyLogo({ variant = 'dark', className = '', academyName, logoUrl }) {
   const isLight = variant === 'light';
+  const primary = resolveLogoSrc(logoUrl);
+  const [src, setSrc] = useState(primary);
+  const [useText, setUseText] = useState(false);
 
   if (isLight) {
     return (
@@ -35,10 +38,6 @@ export default function AcademyLogo({ variant = 'dark', className = '', academyN
       />
     );
   }
-
-  const primary = resolveLogoSrc(logoUrl);
-  const [src, setSrc] = useState(primary);
-  const [useText, setUseText] = useState(false);
 
   const handleError = () => {
     const fallback = CARD_LOGO_PATHS.find((p) => p !== src) || '/logo.png';

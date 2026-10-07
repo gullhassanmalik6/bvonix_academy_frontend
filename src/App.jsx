@@ -15,7 +15,6 @@ import Dashboard from './pages/Dashboard';
 import Courses from './pages/Courses';
 import CourseDetail from './pages/CourseDetail';
 import AdminDashboard from './pages/admin/AdminDashboard';
-import AdminRegister from './pages/admin/AdminRegister';
 import StudentLMS from './pages/StudentLMS';
 import CourseLMSDetail from './pages/CourseLMSDetail';
 import Settings from './pages/Settings';
@@ -35,7 +34,7 @@ function App() {
             <Route path="/" element={<Home />} />
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
-            <Route path="/admin/register" element={<AdminRegister />} />
+            <Route path="/admin/register" element={<Navigate to="/register" replace />} />
             <Route path="/courses" element={<Courses />} />
             <Route path="/courses/:id" element={<CourseDetail />} />
             <Route path="/about" element={<AboutPage />} />

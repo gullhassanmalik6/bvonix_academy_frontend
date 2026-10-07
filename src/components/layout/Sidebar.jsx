@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { isStudentNavActive } from '../../navigation/studentNavigation';
 import { 
   FiGrid, 
   FiChevronLeft, 
@@ -23,7 +24,8 @@ import {
   FiUserCheck,
   FiClipboard,
   FiSettings,
-  FiLogOut
+  FiLogOut,
+  FiHome,
 } from 'react-icons/fi';
 
 const Sidebar = ({ menuItems = [], title = "Navigation", onLogout, onCollapseChange }) => {
@@ -62,7 +64,7 @@ const Sidebar = ({ menuItems = [], title = "Navigation", onLogout, onCollapseCha
   };
 
   const iconMap = {
-    'dashboard': FiGrid,
+    'dashboard': FiHome,
     'courses': FiBook,
     'enrollments': FiBook,
     'available': FiPlusCircle,
@@ -73,15 +75,24 @@ const Sidebar = ({ menuItems = [], title = "Navigation", onLogout, onCollapseCha
     'announcements': FiBell,
     'forum': FiMessageSquare,
     'performance': FiBarChart2,
+    'attendance': FiUserCheck,
     'calendar': FiCalendar,
     'payments': FiCreditCard,
     'certificates': FiStar,
+    'profile': FiUser,
     'users': FiUsers,
     'instructors': FiUserCheck,
     'students': FiUser,
     'enrollments-admin': FiClipboard,
+    'action-queue': FiClipboard,
+    'overview': FiHome,
     'site-settings': FiSettings,
     'settings': FiSettings,
+  };
+
+  const itemIsActive = (item) => {
+    if (item.path) return isStudentNavActive(item.path, location);
+    return Boolean(item.activeTab && item.activeTab === item.id);
   };
 
 
@@ -159,8 +170,7 @@ const Sidebar = ({ menuItems = [], title = "Navigation", onLogout, onCollapseCha
                       <div className="ml-2 border-l-2 border-gray-100">
                         {groupItems.map((subItem) => {
                           const Icon = iconMap[subItem.id] || FiGrid;
-                          const isActive = subItem.path === location.pathname || 
-                                         (subItem.activeTab && typeof subItem.activeTab === 'string' && subItem.activeTab === subItem.id);
+                          const isActive = itemIsActive(subItem);
                           
                           return (
                             <button
@@ -188,8 +198,7 @@ const Sidebar = ({ menuItems = [], title = "Navigation", onLogout, onCollapseCha
               } else {
                 // Regular menu item (flat structure)
                 const Icon = iconMap[item.id] || FiGrid;
-                const isActive = item.path === location.pathname || 
-                               (item.activeTab && typeof item.activeTab === 'string' && item.activeTab === item.id);
+                const isActive = itemIsActive(item);
                 
                 return (
                   <button
@@ -218,8 +227,7 @@ const Sidebar = ({ menuItems = [], title = "Navigation", onLogout, onCollapseCha
             // Render flat menu items (backward compatibility)
             safeMenuItems.map((item) => {
               const Icon = iconMap[item.id] || FiGrid;
-              const isActive = item.path === location.pathname || 
-                             (item.activeTab && typeof item.activeTab === 'string' && item.activeTab === item.id);
+              const isActive = itemIsActive(item);
               
               return (
                 <button
