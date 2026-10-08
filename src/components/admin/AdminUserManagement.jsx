@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { adminService } from '../../services/adminService';
 import { interpretApiError } from '../../services/api';
 import Button from '../common/Button';
@@ -9,6 +9,7 @@ import { DataState, useCollectionView } from '../common/DataState';
 const AdminUserManagement = () => {
   const [users, setUsers] = useState([]);
   const usersView = useCollectionView();
+  const { start, succeed, fail } = usersView;
   const [actionError, setActionError] = useState(null);
   const [editingUser, setEditingUser] = useState(null);
   const [creatingUser, setCreatingUser] = useState(false);
@@ -21,22 +22,22 @@ const AdminUserManagement = () => {
     role: 'user',
   });
 
-  useEffect(() => {
-    loadUsers();
-  }, []);
-
-  const loadUsers = async () => {
-    usersView.start();
+  const loadUsers = useCallback(async () => {
+    start();
     try {
       const response = await adminService.getUsers(0, 100);
       const items = response.items || [];
       setUsers(items);
-      usersView.succeed(items);
+      succeed(items);
     } catch (err) {
       setUsers([]);
-      await usersView.fail(err, 'Failed to load users');
+      await fail(err, 'Failed to load users');
     }
-  };
+  }, [start, succeed, fail]);
+
+  useEffect(() => {
+    loadUsers();
+  }, [loadUsers]);
 
   const handleEdit = (user) => {
     setCreatingUser(false);

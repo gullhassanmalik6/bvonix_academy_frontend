@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useToast } from '../context/ToastContext';
 import { lmsService } from '../services/lmsService';
@@ -382,7 +382,7 @@ const ScholarshipsTab = ({ scholarships, courses }) => {
   if (scholarships.length === 0) {
     return (
       <Card>
-        <p className="text-center text-gray-500 py-8">You don't have any scholarships.</p>
+        <p className="text-center text-gray-500 py-8">You don&apos;t have any scholarships.</p>
       </Card>
     );
   }
@@ -480,13 +480,7 @@ const AssignmentsTab = ({ enrollments, courses }) => {
   const [loading, setLoading] = useState(false);
   const [failure, setFailure] = useState(null);
 
-  useEffect(() => {
-    if (selectedCourse) {
-      loadAssignments();
-    }
-  }, [selectedCourse]);
-
-  const loadAssignments = async () => {
+  const loadAssignments = useCallback(async () => {
     if (!selectedCourse) return;
     try {
       setLoading(true);
@@ -499,7 +493,13 @@ const AssignmentsTab = ({ enrollments, courses }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [selectedCourse]);
+
+  useEffect(() => {
+    if (selectedCourse) {
+      loadAssignments();
+    }
+  }, [selectedCourse, loadAssignments]);
 
   const getCourseDetails = (courseId) => {
     return courses.find(c => c.id === courseId);
@@ -566,18 +566,18 @@ const AssignmentCard = ({ assignment }) => {
   const [fileUrls] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    loadSubmission();
-  }, [assignment.id]);
-
-  const loadSubmission = async () => {
+  const loadSubmission = useCallback(async () => {
     try {
       const data = await lmsService.getMySubmission(assignment.id);
       setSubmission(data);
     } catch (err) {
       // No submission yet
     }
-  };
+  }, [assignment.id]);
+
+  useEffect(() => {
+    loadSubmission();
+  }, [loadSubmission]);
 
   const handleSubmit = async () => {
     try {
@@ -686,15 +686,7 @@ const SessionsTab = ({ enrollments, courses }) => {
   const [loading, setLoading] = useState(false);
   const [failure, setFailure] = useState(null);
 
-  useEffect(() => {
-    if (selectedCourse) {
-      loadSessions();
-    } else {
-      loadUpcoming();
-    }
-  }, [selectedCourse]);
-
-  const loadSessions = async () => {
+  const loadSessions = useCallback(async () => {
     if (!selectedCourse) return;
     try {
       setLoading(true);
@@ -707,9 +699,9 @@ const SessionsTab = ({ enrollments, courses }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [selectedCourse]);
 
-  const loadUpcoming = async () => {
+  const loadUpcoming = useCallback(async () => {
     try {
       setLoading(true);
       const data = await lmsService.getUpcomingSessions();
@@ -721,7 +713,15 @@ const SessionsTab = ({ enrollments, courses }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    if (selectedCourse) {
+      loadSessions();
+    } else {
+      loadUpcoming();
+    }
+  }, [selectedCourse, loadSessions, loadUpcoming]);
 
   const getCourseDetails = (courseId) => {
     return courses.find(c => c.id === courseId);
@@ -826,13 +826,7 @@ const MaterialsTab = ({ enrollments, courses }) => {
   const [loading, setLoading] = useState(false);
   const [failure, setFailure] = useState(null);
 
-  useEffect(() => {
-    if (selectedCourse) {
-      loadMaterials();
-    }
-  }, [selectedCourse]);
-
-  const loadMaterials = async () => {
+  const loadMaterials = useCallback(async () => {
     if (!selectedCourse) return;
     try {
       setLoading(true);
@@ -845,7 +839,13 @@ const MaterialsTab = ({ enrollments, courses }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [selectedCourse]);
+
+  useEffect(() => {
+    if (selectedCourse) {
+      loadMaterials();
+    }
+  }, [selectedCourse, loadMaterials]);
 
   const getCourseDetails = (courseId) => {
     return courses.find(c => c.id === courseId);
@@ -987,13 +987,7 @@ const ForumTab = ({ enrollments, courses }) => {
   const [newPostTitle, setNewPostTitle] = useState('');
   const [newPostContent, setNewPostContent] = useState('');
 
-  useEffect(() => {
-    if (selectedCourse) {
-      loadPosts();
-    }
-  }, [selectedCourse]);
-
-  const loadPosts = async () => {
+  const loadPosts = useCallback(async () => {
     if (!selectedCourse) return;
     try {
       setLoading(true);
@@ -1006,7 +1000,13 @@ const ForumTab = ({ enrollments, courses }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [selectedCourse]);
+
+  useEffect(() => {
+    if (selectedCourse) {
+      loadPosts();
+    }
+  }, [selectedCourse, loadPosts]);
 
   const handleCreatePost = async () => {
     if (!selectedCourse || !newPostContent.trim()) return;
@@ -1727,7 +1727,7 @@ const CertificatesTab = ({ certificates, courses }) => {
   if (certificates.length === 0) {
     return (
       <Card>
-        <p className="text-center text-gray-500 py-8">You don't have any certificates yet. Finish a course and an administrator can issue one.</p>
+        <p className="text-center text-gray-500 py-8">You don&apos;t have any certificates yet. Finish a course and an administrator can issue one.</p>
       </Card>
     );
   }

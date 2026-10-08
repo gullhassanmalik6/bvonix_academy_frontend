@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { FiCheck, FiX, FiAlertCircle, FiInfo, FiAlertTriangle } from 'react-icons/fi';
+import { FiCheck, FiX, FiInfo, FiAlertTriangle } from 'react-icons/fi';
 
 const Toast = ({ toast, onClose }) => {
   useEffect(() => {

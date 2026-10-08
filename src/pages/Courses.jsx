@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { courseService } from '../services/courseService';
 import { siteSettingsService } from '../services/siteSettingsService';
 import { useAuth } from '../context/AuthContext';
@@ -17,7 +17,7 @@ const CatalogSkeleton = () => (
 );
 
 const Courses = () => {
-  const { isAuthenticated, canAccessAdmin } = useAuth();
+  const { isAuthenticated, canAccessAdmin, loading: authLoading } = useAuth();
   const [courses, setCourses] = useState([]);
   const [subjectItems, setSubjectItems] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -31,11 +31,7 @@ const Courses = () => {
       .catch(() => setSubjectItems(siteSettingsService.SUBJECTS_DEFAULTS?.subjects_items || []));
   }, []);
 
-  useEffect(() => {
-    loadCourses();
-  }, [publishedOnly]);
-
-  const loadCourses = async () => {
+  const loadCourses = useCallback(async () => {
     try {
       setLoading(true);
       const params = { skip: 0, limit: 100 };
@@ -49,7 +45,12 @@ const Courses = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [publishedOnly]);
+
+  useEffect(() => {
+    if (authLoading) return;
+    loadCourses();
+  }, [authLoading, isAuthenticated, loadCourses]);
 
   if (loading) {
     return (

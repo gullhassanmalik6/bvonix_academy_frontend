@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { FiCheckCircle, FiXCircle, FiAlertCircle } from 'react-icons/fi';
 
 const Input = ({
@@ -27,13 +27,7 @@ const Input = ({
   const showFloatingLabel = floatingLabel && (isFocused || hasValue);
   const displayError = error || (validateOnChange && hasInteracted && validationError);
 
-  useEffect(() => {
-    if (validateOnChange && hasInteracted && value !== undefined) {
-      validateInput(value);
-    }
-  }, [value, validateOnChange, hasInteracted]);
-
-  const validateInput = (inputValue) => {
+  const validateInput = useCallback((inputValue) => {
     if (!validationRules || Object.keys(validationRules).length === 0) {
       setValidationError(null);
       return;
@@ -41,31 +35,26 @@ const Input = ({
 
     const rules = validationRules;
 
-    // Required validation
     if (rules.required && (!inputValue || inputValue.toString().trim().length === 0)) {
       setValidationError(rules.requiredMessage || 'This field is required');
       return;
     }
 
-    // Min length validation
     if (rules.minLength && inputValue && inputValue.toString().length < rules.minLength) {
       setValidationError(rules.minLengthMessage || `Minimum ${rules.minLength} characters required`);
       return;
     }
 
-    // Max length validation
     if (rules.maxLength && inputValue && inputValue.toString().length > rules.maxLength) {
       setValidationError(rules.maxLengthMessage || `Maximum ${rules.maxLength} characters allowed`);
       return;
     }
 
-    // Pattern validation (regex)
     if (rules.pattern && inputValue && !rules.pattern.test(inputValue)) {
       setValidationError(rules.patternMessage || 'Invalid format');
       return;
     }
 
-    // Email validation
     if (rules.email && inputValue) {
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!emailRegex.test(inputValue)) {
@@ -74,7 +63,6 @@ const Input = ({
       }
     }
 
-    // Custom validation function
     if (rules.validate && typeof rules.validate === 'function') {
       const customError = rules.validate(inputValue);
       if (customError) {
@@ -84,7 +72,13 @@ const Input = ({
     }
 
     setValidationError(null);
-  };
+  }, [validationRules]);
+
+  useEffect(() => {
+    if (validateOnChange && hasInteracted && value !== undefined) {
+      validateInput(value);
+    }
+  }, [value, validateOnChange, hasInteracted, validateInput]);
 
   const handleChange = (e) => {
     setHasInteracted(true);

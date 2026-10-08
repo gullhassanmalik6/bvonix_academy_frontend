@@ -1,6 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
 import { useBreadcrumb } from '../context/BreadcrumbContext';
 import { useToast } from '../context/ToastContext';
 import { lmsService } from '../services/lmsService';
@@ -32,7 +31,6 @@ async function optionalRequest(promise, fallback) {
 const CourseLMSDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { user } = useAuth();
   const { setBreadcrumbItems } = useBreadcrumb();
   const [course, setCourse] = useState(null);
   const [enrollment, setEnrollment] = useState(null);
@@ -51,16 +49,7 @@ const CourseLMSDetail = () => {
   const [error, setError] = useState(null);
   const [sectionFailures, setSectionFailures] = useState({});
 
-  useEffect(() => {
-    loadCourseData();
-    
-    // Cleanup breadcrumbs when component unmounts
-    return () => {
-      setBreadcrumbItems([]);
-    };
-  }, [id, setBreadcrumbItems]);
-
-  const loadCourseData = async () => {
+  const loadCourseData = useCallback(async () => {
     try {
       setLoading(true);
       const [
@@ -130,7 +119,15 @@ const CourseLMSDetail = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [id, setBreadcrumbItems]);
+
+  useEffect(() => {
+    loadCourseData();
+
+    return () => {
+      setBreadcrumbItems([]);
+    };
+  }, [loadCourseData, setBreadcrumbItems]);
 
   if (loading) {
     return (
@@ -429,13 +426,57 @@ const ResultsTab = ({ results, failure, onRetry }) => {
 };
 
 // Attendance Tab Component
-const AttendanceTab = ({ attendance, stats, failure, onRetry }) => {
+const AttendanceTab = ({ attendance, stats, courseId, failure, onRetry }) => {
   const toast = useToast();
   const [submittingReason, setSubmittingReason] = useState(null);
   const [reasonText, setReasonText] = useState('');
   const [loading, setLoading] = useState(false);
+  const [corrections, setCorrections] = useState([]);
+  const [correctingId, setCorrectingId] = useState(null);
+  const [correctionReason, setCorrectionReason] = useState('');
+  const [requestedStatus, setRequestedStatus] = useState('present');
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!courseId) return undefined;
+    lmsService.getMyAttendanceCorrections(courseId)
+      .then((data) => {
+        if (!cancelled) setCorrections(data.items || []);
+      })
+      .catch(() => {
+        if (!cancelled) setCorrections([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [courseId]);
   const blocked = blockedSection(failure, onRetry);
   if (blocked) return blocked;
+
+  const openCorrection = (attendanceId) => corrections.find(
+    (item) => item.attendance_id === attendanceId && (item.status === 'requested' || item.status === 'under_review'),
+  );
+
+  const handleRequestCorrection = async (attendanceId) => {
+    if (correctionReason.trim().length < 10) {
+      toast.warning('Explain the correction in at least 10 characters', { duration: 3000 });
+      return;
+    }
+    try {
+      setLoading(true);
+      await lmsService.requestAttendanceCorrection(attendanceId, correctionReason.trim(), requestedStatus);
+      const data = await lmsService.getMyAttendanceCorrections(courseId);
+      setCorrections(data.items || []);
+      setCorrectingId(null);
+      setCorrectionReason('');
+      toast.success('Correction request submitted', { duration: 3000 });
+    } catch (err) {
+      const failure = await interpretApiError(err, 'Failed to request a correction');
+      toast.error(failure.kind === 'denied' ? `Permission denied. ${failure.message}` : failure.message, { duration: 4000 });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleSubmitReason = async (attendanceId) => {
     if (!reasonText.trim()) {
@@ -518,6 +559,50 @@ const AttendanceTab = ({ attendance, stats, failure, onRetry }) => {
                 </span>
               </div>
               
+              {openCorrection(record.id) ? (
+                <p className="mt-3 text-sm text-gray-700">
+                  Correction {openCorrection(record.id).status.replace('_', ' ')}: {openCorrection(record.id).previous_status} → {openCorrection(record.id).requested_status}
+                </p>
+              ) : correctingId === record.id ? (
+                <div className="mt-3 space-y-2 border-t pt-3">
+                  <label className="block text-sm font-medium text-gray-700">Requested status</label>
+                  <select
+                    value={requestedStatus}
+                    onChange={(event) => setRequestedStatus(event.target.value)}
+                    className="w-full border border-gray-300 px-3 py-2"
+                  >
+                    {['present', 'absent', 'late', 'excused'].filter((status) => status !== record.status).map((status) => (
+                      <option key={status} value={status}>{status}</option>
+                    ))}
+                  </select>
+                  <textarea
+                    value={correctionReason}
+                    onChange={(event) => setCorrectionReason(event.target.value)}
+                    rows={3}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                    placeholder="Explain why this attendance mark should change"
+                  />
+                  <div className="flex space-x-2">
+                    <Button onClick={() => handleRequestCorrection(record.id)} disabled={loading} className="bg-blue-500 hover:bg-blue-600 text-sm">
+                      {loading ? 'Submitting...' : 'Submit correction'}
+                    </Button>
+                    <Button onClick={() => { setCorrectingId(null); setCorrectionReason(''); }} className="bg-gray-500 hover:bg-gray-600 text-sm">
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <Button
+                  onClick={() => {
+                    setCorrectingId(record.id);
+                    setRequestedStatus(['present', 'absent', 'late', 'excused'].find((status) => status !== record.status) || 'present');
+                  }}
+                  className="mt-3 bg-gray-700 hover:bg-gray-800 text-sm"
+                >
+                  Request correction
+                </Button>
+              )}
+
               {/* Absence Reason Section */}
               {(record.status === 'absent' || record.status === 'late') && (
                 <div className="mt-3 pt-3 border-t">

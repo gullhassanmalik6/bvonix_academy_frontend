@@ -182,6 +182,32 @@ export const adminService = {
     return response.data;
   },
 
+  async getAttendanceCorrections(skip = 0, limit = 100, filters = {}) {
+    const response = await api.get('/admin/attendance/corrections', {
+      params: { skip, limit, ...filters },
+    });
+    return response.data;
+  },
+
+  async reviewAttendanceCorrection(correctionId) {
+    const response = await api.post(`/admin/attendance/corrections/${correctionId}/review`);
+    return response.data;
+  },
+
+  async approveAttendanceCorrection(correctionId, reviewNote) {
+    const response = await api.post(`/admin/attendance/corrections/${correctionId}/approve`, {
+      review_note: reviewNote || null,
+    });
+    return response.data;
+  },
+
+  async rejectAttendanceCorrection(correctionId, reviewNote) {
+    const response = await api.post(`/admin/attendance/corrections/${correctionId}/reject`, {
+      review_note: reviewNote || null,
+    });
+    return response.data;
+  },
+
   // ==================== Course Materials ====================
 
   async getMaterials(courseId, skip = 0, limit = 100) {

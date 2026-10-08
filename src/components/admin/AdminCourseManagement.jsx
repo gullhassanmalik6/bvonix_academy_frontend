@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { adminService } from '../../services/adminService';
 import { interpretApiError } from '../../services/api';
 import Button from '../common/Button';
@@ -9,6 +9,7 @@ import { DataState, useCollectionView } from '../common/DataState';
 const AdminCourseManagement = () => {
   const [courses, setCourses] = useState([]);
   const listView = useCollectionView();
+  const { start, succeed, fail } = listView;
   const [actionError, setActionError] = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [editingCourse, setEditingCourse] = useState(null);
@@ -21,22 +22,22 @@ const AdminCourseManagement = () => {
     is_published: false,
   });
 
-  useEffect(() => {
-    loadCourses();
-  }, []);
-
-  const loadCourses = async () => {
-    listView.start();
+  const loadCourses = useCallback(async () => {
+    start();
     try {
       const response = await adminService.getCourses(0, 100, false);
       const items = response.items || [];
       setCourses(items);
-      listView.succeed(items);
+      succeed(items);
     } catch (err) {
       setCourses([]);
-      await listView.fail(err, 'Failed to load courses');
+      await fail(err, 'Failed to load courses');
     }
-  };
+  }, [start, succeed, fail]);
+
+  useEffect(() => {
+    loadCourses();
+  }, [loadCourses]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
