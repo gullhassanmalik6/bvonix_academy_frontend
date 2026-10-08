@@ -117,6 +117,21 @@ export const lmsService = {
     return response.data;
   },
 
+  async getMyAttendanceCorrections(courseId) {
+    const response = await api.get('/lms/attendance/corrections', {
+      params: courseId ? { course_id: courseId } : {},
+    });
+    return response.data;
+  },
+
+  async requestAttendanceCorrection(attendanceId, reason, requestedStatus) {
+    const response = await api.post(`/lms/attendance/${attendanceId}/corrections`, {
+      reason,
+      requested_status: requestedStatus,
+    });
+    return response.data;
+  },
+
   // ==================== Course Materials ====================
 
   async getCourseMaterials(courseId) {

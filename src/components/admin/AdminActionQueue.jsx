@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { adminService } from '../../services/adminService';
 import { interpretApiError } from '../../services/api';
+import AttendanceCorrectionList from './AttendanceCorrectionList';
 
 const LIST_LIMIT = 100;
 const GRADE_STATUSES = new Set(['pending', 'submitted', 'late', 'resubmitted']);
@@ -147,14 +148,6 @@ export default function AdminActionQueue({ onOpen }) {
   const [sections, setSections] = useState(() => ({
     payments: access.payments ? emptySection() : null,
     enrollments: access.enrollments ? emptySection() : null,
-    attendance: access.attendance
-      ? {
-          status: 'unavailable',
-          items: [],
-          error: null,
-          note: 'Attendance corrections are not available from the API. Records are present, absent, late, or excused, and there is no list of correction requests.',
-        }
-      : null,
     scholarships: access.scholarships ? emptySection() : null,
     assignments: access.assignments ? emptySection() : null,
   }));
@@ -361,14 +354,6 @@ export default function AdminActionQueue({ onOpen }) {
     setSections({
       payments: nextAccess.payments ? emptySection() : null,
       enrollments: nextAccess.enrollments ? emptySection() : null,
-      attendance: nextAccess.attendance
-        ? {
-            status: 'unavailable',
-            items: [],
-            error: null,
-            note: 'Attendance corrections are not available from the API. Records are present, absent, late, or excused, and there is no list of correction requests.',
-          }
-        : null,
       scholarships: nextAccess.scholarships ? emptySection() : null,
       assignments: nextAccess.assignments ? emptySection() : null,
     });
@@ -415,7 +400,18 @@ export default function AdminActionQueue({ onOpen }) {
         </p>
       ) : (
         visible.map(([key, title]) => (
-          <Section key={key} title={title} section={sections[key]} onOpen={onOpen} />
+          key === 'attendance' ? (
+            <section key={key} className="border border-gray-200 bg-white">
+              <div className="border-b border-gray-200 px-4 py-3">
+                <h2 className="text-base font-semibold text-gray-900">{title}</h2>
+              </div>
+              <div className="px-4 py-3">
+                <AttendanceCorrectionList onOpen={onOpen} />
+              </div>
+            </section>
+          ) : (
+            <Section key={key} title={title} section={sections[key]} onOpen={onOpen} />
+          )
         ))
       )}
     </div>

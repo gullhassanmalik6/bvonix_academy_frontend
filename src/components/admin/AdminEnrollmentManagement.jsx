@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { adminService } from '../../services/adminService';
 import { downloadCardPreviewPdf, fetchPreviewCardData } from '../../utils/cardPreviewPdf';
@@ -17,6 +17,7 @@ const AdminEnrollmentManagement = ({ focusId = null }) => {
   const [courses, setCourses] = useState([]);
   const [loading, setLoading] = useState(true);
   const listView = useCollectionView();
+  const { succeed, fail } = listView;
   const [filters, setFilters] = useState({
     status: '',
     payment_status: '',
@@ -26,16 +27,7 @@ const AdminEnrollmentManagement = ({ focusId = null }) => {
   const [cardFormData, setCardFormData] = useState(null);
   const [cardFormLoading, setCardFormLoading] = useState(false);
 
-  useEffect(() => {
-    loadData();
-  }, [filters]);
-
-  useEffect(() => {
-    if (!focusId || loading) return;
-    document.getElementById(`enrollment-${focusId}`)?.scrollIntoView({ block: 'center' });
-  }, [focusId, loading, enrollments]);
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       setLoading(true);
       const [enrollmentsData, coursesData] = await Promise.all([
@@ -45,14 +37,23 @@ const AdminEnrollmentManagement = ({ focusId = null }) => {
       const items = enrollmentsData.items || [];
       setEnrollments(items);
       setCourses(coursesData.items || []);
-      listView.succeed(items);
+      succeed(items);
     } catch (err) {
       setEnrollments([]);
-      await listView.fail(err, 'Failed to load enrollments');
+      await fail(err, 'Failed to load enrollments');
     } finally {
       setLoading(false);
     }
-  };
+  }, [filters, succeed, fail]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
+
+  useEffect(() => {
+    if (!focusId || loading) return;
+    document.getElementById(`enrollment-${focusId}`)?.scrollIntoView({ block: 'center' });
+  }, [focusId, loading, enrollments]);
 
   const handleTransition = async (enrollmentId, workflowState, label) => {
     if (!window.confirm(`${label}?`)) {

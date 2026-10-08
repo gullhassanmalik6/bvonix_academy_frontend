@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { adminService } from '../../services/adminService';
 import { interpretApiError } from '../../services/api';
 import { DataState, useCollectionView } from '../common/DataState';
@@ -8,6 +8,7 @@ import Button from '../common/Button';
 import EmptyState from '../common/EmptyState';
 import Card from '../common/Card';
 import Input from '../common/Input';
+import AttendanceCorrectionList from './AttendanceCorrectionList';
 
 const AdminAttendanceManagement = () => {
   const { user } = useAuth();
@@ -17,6 +18,7 @@ const AdminAttendanceManagement = () => {
   const [enrollments, setEnrollments] = useState([]);
   const [loading, setLoading] = useState(true);
   const listView = useCollectionView();
+  const { start, succeed, fail } = listView;
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState({
     student_id: '',
@@ -28,12 +30,8 @@ const AdminAttendanceManagement = () => {
     is_excused: false,
   });
 
-  useEffect(() => {
-    loadData();
-  }, []);
-
-  const loadData = async () => {
-    listView.start();
+  const loadData = useCallback(async () => {
+    start();
     try {
       setLoading(true);
       const [studentsData, coursesData, enrollmentsData] = await Promise.all([
@@ -45,16 +43,20 @@ const AdminAttendanceManagement = () => {
       setCourses(coursesData.items || []);
       const items = enrollmentsData.items || [];
       setEnrollments(items);
-      listView.succeed(items);
+      succeed(items);
     } catch (err) {
       setStudents([]);
       setCourses([]);
       setEnrollments([]);
-      await listView.fail(err, 'Failed to load attendance data');
+      await fail(err, 'Failed to load attendance data');
     } finally {
       setLoading(false);
     }
-  };
+  }, [start, succeed, fail]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   const handleStudentChange = (studentId) => {
     const enrollment = enrollments.find((e) => e.student_id === studentId);
@@ -154,6 +156,10 @@ const AdminAttendanceManagement = () => {
         </Card>
       )}
 
+      <Card className="mb-6">
+        <h3 className="text-lg font-semibold mb-3">Correction requests</h3>
+        <AttendanceCorrectionList />
+      </Card>
       <Card>
         <p className="text-gray-600 text-sm">
           Mark attendance for verified enrollments. Absent/late records automatically update scholarship absence counts and may trigger notifications.

@@ -21,7 +21,6 @@ export default function CardPrintPreview() {
   useEffect(() => {
     const updateScale = () => {
       const cardW = 53.98;
-      const cardH = 85.6;
       const gap = 6;
       const totalW = cardW * 2 + gap;
       const mmToPx = 3.7795275591;

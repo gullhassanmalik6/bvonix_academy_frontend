@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { authService } from '../services/authService';
 import { canAccessAdminPanel } from '../navigation/adminAccess';
+import { clearClientSession, refreshAccessToken, setAccessToken } from '../services/api';
 
 const AuthContext = createContext(null);
 
@@ -21,28 +22,15 @@ export const AuthProvider = ({ children }) => {
     let cancelled = false;
 
     const init = async () => {
-      const token = localStorage.getItem('token');
-      const storedUser = localStorage.getItem('user');
-
-      if (!token || !storedUser) {
-        if (!cancelled) setLoading(false);
-        return;
-      }
-
+      clearClientSession();
       try {
-        const cached = JSON.parse(storedUser);
-        if (!cancelled) {
-          setUser(cached);
-          setIsAuthenticated(true);
-        }
+        await refreshAccessToken();
         const userData = await authService.getCurrentUser();
         if (cancelled) return;
         setUser(userData);
         setIsAuthenticated(true);
-        localStorage.setItem('user', JSON.stringify(userData));
       } catch {
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
+        clearClientSession();
         if (!cancelled) {
           setUser(null);
           setIsAuthenticated(false);
@@ -61,16 +49,11 @@ export const AuthProvider = ({ children }) => {
   const login = async (email, password) => {
     try {
       const response = await authService.login(email, password);
-      const { access_token } = response;
-      
-      // Store token
-      localStorage.setItem('token', access_token);
-      
-      // Get user data
+      setAccessToken(response.access_token);
+
       const userData = await authService.getCurrentUser();
       setUser(userData);
       setIsAuthenticated(true);
-      localStorage.setItem('user', JSON.stringify(userData));
       
       return { 
         success: true,
@@ -110,19 +93,14 @@ export const AuthProvider = ({ children }) => {
   };
 
   const logout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
+    authService.logout().catch(() => {});
+    clearClientSession();
     setUser(null);
     setIsAuthenticated(false);
   };
 
   const updateUser = (updatedUser) => {
     setUser(updatedUser);
-    if (updatedUser) {
-      localStorage.setItem('user', JSON.stringify(updatedUser));
-    } else {
-      localStorage.removeItem('user');
-    }
   };
 
   const isAdmin = user?.role === 'admin';

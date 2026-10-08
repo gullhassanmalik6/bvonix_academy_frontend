@@ -5,7 +5,8 @@ export const authService = {
    * Register a student account. Administrator accounts are created by an existing admin.
    */
   async register(data) {
-    const { role, ...userData } = data;
+    const userData = { ...data };
+    delete userData.role;
     const response = await api.post('/auth/register', userData);
     return response.data;
   },
@@ -16,6 +17,10 @@ export const authService = {
   async login(email, password) {
     const response = await api.post('/auth/login', { email, password });
     return response.data;
+  },
+
+  async logout() {
+    await api.post('/auth/logout');
   },
 
   /**

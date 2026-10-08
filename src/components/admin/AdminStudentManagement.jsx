@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { adminService } from '../../services/adminService';
 import { interpretApiError } from '../../services/api';
 import Button from '../common/Button';
@@ -9,6 +9,7 @@ import { DataState, useCollectionView } from '../common/DataState';
 const AdminStudentManagement = () => {
   const [students, setStudents] = useState([]);
   const listView = useCollectionView();
+  const { start, succeed, fail } = listView;
   const [actionError, setActionError] = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [editingStudent, setEditingStudent] = useState(null);
@@ -17,22 +18,22 @@ const AdminStudentManagement = () => {
     enrollment_date: new Date().toISOString().split('T')[0],
   });
 
-  useEffect(() => {
-    loadStudents();
-  }, []);
-
-  const loadStudents = async () => {
-    listView.start();
+  const loadStudents = useCallback(async () => {
+    start();
     try {
       const response = await adminService.getStudents(0, 100);
       const items = response.items || [];
       setStudents(items);
-      listView.succeed(items);
+      succeed(items);
     } catch (err) {
       setStudents([]);
-      await listView.fail(err, 'Failed to load students');
+      await fail(err, 'Failed to load students');
     }
-  };
+  }, [start, succeed, fail]);
+
+  useEffect(() => {
+    loadStudents();
+  }, [loadStudents]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { adminService } from '../../services/adminService';
 import { interpretApiError } from '../../services/api';
 import Button from '../common/Button';
@@ -9,6 +9,7 @@ import { DataState, useCollectionView } from '../common/DataState';
 const AdminInstructorManagement = () => {
   const [instructors, setInstructors] = useState([]);
   const listView = useCollectionView();
+  const { start, succeed, fail } = listView;
   const [actionError, setActionError] = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [editingInstructor, setEditingInstructor] = useState(null);
@@ -19,22 +20,22 @@ const AdminInstructorManagement = () => {
     years_of_experience: 0,
   });
 
-  useEffect(() => {
-    loadInstructors();
-  }, []);
-
-  const loadInstructors = async () => {
-    listView.start();
+  const loadInstructors = useCallback(async () => {
+    start();
     try {
       const response = await adminService.getInstructors(0, 100);
       const items = response.items || [];
       setInstructors(items);
-      listView.succeed(items);
+      succeed(items);
     } catch (err) {
       setInstructors([]);
-      await listView.fail(err, 'Failed to load instructors');
+      await fail(err, 'Failed to load instructors');
     }
-  };
+  }, [start, succeed, fail]);
+
+  useEffect(() => {
+    loadInstructors();
+  }, [loadInstructors]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();

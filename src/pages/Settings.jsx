@@ -7,7 +7,7 @@ import StudentDashboardLayout from '../components/layout/StudentDashboardLayout'
 import Card from '../components/common/Card';
 import Button from '../components/common/Button';
 import Input from '../components/common/Input';
-import { FiUser, FiBell, FiLock, FiMail, FiSave, FiTrash2 } from 'react-icons/fi';
+import { FiUser, FiBell, FiLock, FiSave, FiTrash2 } from 'react-icons/fi';
 import { FormSkeleton } from '../components/common/Skeleton';
 import { ErrorState, PermissionDenied } from '../components/common/DataState';
 import { interpretApiError } from '../services/api';
@@ -109,7 +109,7 @@ const Settings = () => {
     e.preventDefault();
     setLoading(true);
     try {
-      const response = await settingsService.updateProfile({
+      await settingsService.updateProfile({
         full_name: profileData.full_name,
         phone: profileData.phone,
       });
@@ -152,12 +152,14 @@ const Settings = () => {
         securityData.current_password,
         securityData.new_password
       );
-      toast.success('Password changed successfully!', { duration: 3000 });
+      toast.success('Password changed successfully. Please sign in again.', { duration: 3000 });
       setSecurityData({
         current_password: '',
         new_password: '',
         confirm_password: '',
       });
+      logout();
+      navigate('/login');
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Failed to change password', { duration: 4000 });
     } finally {

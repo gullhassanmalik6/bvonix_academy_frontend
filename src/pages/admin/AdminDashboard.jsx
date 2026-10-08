@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { isPaymentAdmin } from '../../navigation/adminAccess';
+import { adminNavigation } from '../../navigation/adminNavigation';
 import AdminAuditLog from '../../components/admin/AdminAuditLog';
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import AdminCourseManagement from '../../components/admin/AdminCourseManagement';
@@ -25,48 +25,11 @@ const AdminDashboard = () => {
     setActiveTab(focus.tab);
   };
 
-  const paymentAdmin = isPaymentAdmin(user?.role);
-  const menuItems = [
-    {
-      group: 'Work',
-      items: [
-        { id: 'overview', label: 'Dashboard', onClick: () => setActiveTab('overview'), activeTab },
-      ],
-    },
-    {
-      group: 'Content Management',
-      items: [
-        { id: 'courses', label: 'Courses', onClick: () => setActiveTab('courses'), activeTab },
-        { id: 'course-content', label: 'Course Content', onClick: () => setActiveTab('course-content'), activeTab },
-        { id: 'enrollments-admin', label: 'Enrollments', onClick: () => setActiveTab('enrollments'), activeTab },
-      ],
-    },
-    {
-      group: 'User Management',
-      items: [
-        ...(paymentAdmin ? [{ id: 'users', label: 'Users', onClick: () => setActiveTab('users'), activeTab }] : []),
-        { id: 'instructors', label: 'Instructors', onClick: () => setActiveTab('instructors'), activeTab },
-        { id: 'students', label: 'Students', onClick: () => setActiveTab('students'), activeTab },
-      ],
-    },
-    {
-      group: 'Academic',
-      items: [
-        { id: 'attendance', label: 'Attendance', onClick: () => setActiveTab('attendance'), activeTab },
-        ...(paymentAdmin ? [
-          { id: 'scholarships', label: 'Scholarships', onClick: () => setActiveTab('scholarships'), activeTab },
-          { id: 'payments', label: 'Payments', onClick: () => setActiveTab('payments'), activeTab },
-        ] : []),
-      ],
-    },
-    ...(paymentAdmin ? [{
-      group: 'Records',
-      items: [
-        { id: 'audit-log', label: 'Audit log', onClick: () => setActiveTab('audit-log'), activeTab },
-        { id: 'site-settings', label: 'Site Settings', onClick: () => setActiveTab('site-settings'), activeTab },
-      ],
-    }] : []),
-  ];
+  const menuItems = adminNavigation({
+    role: user?.role,
+    activeTab,
+    onSelect: setActiveTab,
+  });
 
   return (
     <DashboardLayout menuItems={menuItems} title="Admin">

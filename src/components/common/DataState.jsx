@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import Button from './Button';
 import EmptyState from './EmptyState';
 import { CardSkeleton, FormSkeleton, ListSkeleton, TableSkeleton } from './Skeleton';
@@ -58,21 +58,21 @@ export function useCollectionView() {
   const [status, setStatus] = useState('loading');
   const [message, setMessage] = useState('');
 
-  return {
-    status,
-    message,
-    start() {
-      setStatus('loading');
-      setMessage('');
-    },
-    succeed(items) {
-      setMessage('');
-      setStatus(items && items.length > 0 ? 'ready' : 'empty');
-    },
-    async fail(error, fallback) {
-      const failure = await interpretApiError(error, fallback);
-      setStatus(failure.kind === 'denied' ? 'denied' : 'error');
-      setMessage(failure.message);
-    },
-  };
+  const start = useCallback(() => {
+    setStatus('loading');
+    setMessage('');
+  }, []);
+
+  const succeed = useCallback((items) => {
+    setMessage('');
+    setStatus(items && items.length > 0 ? 'ready' : 'empty');
+  }, []);
+
+  const fail = useCallback(async (error, fallback) => {
+    const failure = await interpretApiError(error, fallback);
+    setStatus(failure.kind === 'denied' ? 'denied' : 'error');
+    setMessage(failure.message);
+  }, []);
+
+  return { status, message, start, succeed, fail };
 }

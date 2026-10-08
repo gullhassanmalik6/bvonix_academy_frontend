@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { adminService } from '../../services/adminService';
 import { interpretApiError } from '../../services/api';
 import { ErrorState, PermissionDenied } from '../common/DataState';
@@ -37,6 +37,7 @@ function SelectField({ label, value, onChange, options }) {
 
 export default function AdminCourseContent({ focus = null }) {
   const toast = useToast();
+  const showError = toast.error;
   const [courses, setCourses] = useState([]);
   const [selectedCourseId, setSelectedCourseId] = useState('');
   const [activeSubTab, setActiveSubTab] = useState('materials');
@@ -79,16 +80,7 @@ export default function AdminCourseContent({ focus = null }) {
     })();
   }, [toast, focus?.courseId]);
 
-  useEffect(() => {
-    if (selectedCourseId) loadItems();
-  }, [selectedCourseId, activeSubTab]);
-
-  useEffect(() => {
-    if (!focus?.submissionId || loading) return;
-    document.getElementById(`submission-${focus.submissionId}`)?.scrollIntoView({ block: 'center' });
-  }, [focus?.submissionId, loading, submissions]);
-
-  async function loadItems() {
+  const loadItems = useCallback(async () => {
     if (!selectedCourseId) return;
     try {
       setLoading(true);
@@ -114,7 +106,7 @@ export default function AdminCourseContent({ focus = null }) {
           setSubmissions(Array.isArray(subs) ? subs : []);
         } catch (err) {
           const failure = await interpretApiError(err, 'Failed to load submissions');
-          toast.error(failure.kind === 'denied' ? `Permission denied. ${failure.message}` : failure.message);
+          showError(failure.kind === 'denied' ? `Permission denied. ${failure.message}` : failure.message);
         }
       }
     } catch (err) {
@@ -123,7 +115,16 @@ export default function AdminCourseContent({ focus = null }) {
     } finally {
       setLoading(false);
     }
-  }
+  }, [selectedCourseId, activeSubTab, showError]);
+
+  useEffect(() => {
+    if (selectedCourseId) loadItems();
+  }, [selectedCourseId, loadItems]);
+
+  useEffect(() => {
+    if (!focus?.submissionId || loading) return;
+    document.getElementById(`submission-${focus.submissionId}`)?.scrollIntoView({ block: 'center' });
+  }, [focus?.submissionId, loading, submissions]);
 
   function resetForm() {
     setFormData({});

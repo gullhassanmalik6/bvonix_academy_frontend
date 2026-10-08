@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { adminService } from '../../services/adminService';
 import { interpretApiError } from '../../services/api';
 import { useToast } from '../../context/ToastContext';
@@ -15,6 +15,7 @@ const AdminPaymentManagement = ({ focusId = null }) => {
   const [courses, setCourses] = useState([]);
   const [loading, setLoading] = useState(true);
   const listView = useCollectionView();
+  const { start, succeed, fail } = listView;
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState({
     student_id: '',
@@ -26,15 +27,8 @@ const AdminPaymentManagement = ({ focusId = null }) => {
     notes: '',
   });
 
-  useEffect(() => { loadData(); }, []);
-
-  useEffect(() => {
-    if (!focusId || loading) return;
-    document.getElementById(`payment-${focusId}`)?.scrollIntoView({ block: 'center' });
-  }, [focusId, loading, payments]);
-
-  const loadData = async () => {
-    listView.start();
+  const loadData = useCallback(async () => {
+    start();
     try {
       setLoading(true);
       const [payData, studentsData, coursesData] = await Promise.all([
@@ -46,14 +40,21 @@ const AdminPaymentManagement = ({ focusId = null }) => {
       setPayments(items);
       setStudents(studentsData.items || []);
       setCourses(coursesData.items || []);
-      listView.succeed(items);
+      succeed(items);
     } catch (err) {
       setPayments([]);
-      await listView.fail(err, 'Failed to load payments');
+      await fail(err, 'Failed to load payments');
     } finally {
       setLoading(false);
     }
-  };
+  }, [start, succeed, fail]);
+
+  useEffect(() => { loadData(); }, [loadData]);
+
+  useEffect(() => {
+    if (!focusId || loading) return;
+    document.getElementById(`payment-${focusId}`)?.scrollIntoView({ block: 'center' });
+  }, [focusId, loading, payments]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
