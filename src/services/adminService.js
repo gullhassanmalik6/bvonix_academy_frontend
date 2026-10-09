@@ -342,6 +342,38 @@ export const adminService = {
     return response.data;
   },
 
+  async getFeeSummary(enrollmentId) {
+    const response = await api.get(`/admin/enrollments/${enrollmentId}/fee-summary`);
+    return response.data;
+  },
+
+  async setFeeDueDate(enrollmentId, feeDueDate) {
+    const response = await api.patch(`/admin/enrollments/${enrollmentId}/fee-due-date`, {
+      fee_due_date: feeDueDate,
+    });
+    return response.data;
+  },
+
+  async grantAccessException(enrollmentId, reason, expiresAt) {
+    const response = await api.post(`/admin/enrollments/${enrollmentId}/access-exception`, {
+      reason,
+      expires_at: expiresAt || null,
+    });
+    return response.data;
+  },
+
+  async getAttendanceClaims(courseId, sessionDate) {
+    const response = await api.get('/admin/attendance/claims', {
+      params: { course_id: courseId, session_date: sessionDate },
+    });
+    return response.data;
+  },
+
+  async decideAttendanceClaim(claimId, action, reason) {
+    const response = await api.post(`/admin/attendance/claims/${claimId}/decide`, { action, reason });
+    return response.data;
+  },
+
   async updatePayment(paymentId, data) {
     const response = await api.patch(`/admin/payments/${paymentId}`, data);
     return response.data;

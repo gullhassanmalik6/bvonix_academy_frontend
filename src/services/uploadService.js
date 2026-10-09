@@ -13,6 +13,15 @@ export const uploadService = {
     return response.data;
   },
 
+  async uploadCourseImage(file) {
+    const formData = new FormData();
+    formData.append('file', file);
+    const response = await api.post('/uploads/course-image', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return response.data;
+  },
+
   async uploadPaymentReceipt(file) {
     const formData = new FormData();
     formData.append('file', file);

@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { FiClock, FiArrowRight } from 'react-icons/fi';
 import { COURSE_CARD_ICONS } from '../../utils/courseCardTheme';
 import { formatPKR } from '../../utils/helpers';
+import { getFileUrl } from '../../services/api';
 
 /**
  * @param {'browse' | 'enroll'} mode - browse links to detail page; enroll shows Enroll Now action
@@ -18,8 +19,12 @@ const CourseCatalogCard = ({ course, theme, showAdminMeta = false, mode = 'brows
       }`}
       style={{ backgroundColor: theme.backgroundColor }}
     >
-      <div className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-1/2 w-16 h-16 rounded-full bg-white shadow-lg flex items-center justify-center shrink-0 z-10 border border-white/80">
-        <IconComponent className="w-7 h-7" style={{ color: theme.backgroundColor }} />
+      <div className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-1/2 w-16 h-16 rounded-full bg-white shadow-lg flex items-center justify-center shrink-0 z-10 border border-white/80 overflow-hidden">
+        {course.image_url ? (
+          <img src={getFileUrl(course.image_url)} alt="" className="w-full h-full object-cover" onError={(event) => { event.currentTarget.style.display = 'none'; }} />
+        ) : (
+          <IconComponent className="w-7 h-7" style={{ color: theme.backgroundColor }} />
+        )}
       </div>
 
       <div className="pl-10 pr-5 py-5 flex flex-col flex-1 min-w-0">
@@ -29,6 +34,7 @@ const CourseCatalogCard = ({ course, theme, showAdminMeta = false, mode = 'brows
         <p className="text-white/90 text-sm leading-relaxed line-clamp-2 flex-1">
           {description}
         </p>
+        <p className="text-white/80 text-xs mt-1">Instructor: {course.instructor_name || 'Instructor not assigned'}</p>
 
         <div className="mt-4 flex items-center justify-between gap-3 flex-wrap">
           <div className="flex items-center gap-2 text-white/85 text-xs sm:text-sm flex-wrap">

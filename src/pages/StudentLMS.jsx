@@ -5,7 +5,7 @@ import { lmsService } from '../services/lmsService';
 import { downloadCardPreviewPdf, fetchPreviewCardData, openCardPreviewPdf } from '../utils/cardPreviewPdf';
 import { courseService } from '../services/courseService';
 import { siteSettingsService } from '../services/siteSettingsService';
-import { getApiErrorMessage, interpretApiError, openPrivateUpload } from '../services/api';
+import { downloadPrivateUpload, getApiErrorMessage, interpretApiError, openPrivateUpload } from '../services/api';
 import { DataState, ErrorState, PermissionDenied } from '../components/common/DataState';
 import EnrollmentWizard from '../components/enrollment/EnrollmentWizard';
 import { enrollmentWorkflowState, nextExpectedAction } from '../enrollment/enrollmentWizard';
@@ -29,6 +29,7 @@ const StudentLMS = () => {
   const [upcomingSessions, setUpcomingSessions] = useState([]);
   const [performance, setPerformance] = useState(null);
   const [payments, setPayments] = useState([]);
+  const [obligations, setObligations] = useState([]);
   const [calendarEvents, setCalendarEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [failure, setFailure] = useState(null);
@@ -64,7 +65,7 @@ const StudentLMS = () => {
   const hasVerifiedEnrollment = enrollments.some((e) => e.verified_by_admin);
   useEffect(() => {
     if (loading) return;
-    const restrictedTabs = ['dashboard', 'scholarships', 'assignments', 'sessions', 'materials', 'forum', 'announcements', 'performance', 'attendance', 'calendar', 'payments', 'certificates'];
+    const restrictedTabs = ['dashboard', 'scholarships', 'assignments', 'sessions', 'materials', 'forum', 'announcements', 'performance', 'attendance', 'calendar', 'certificates'];
     if (!hasVerifiedEnrollment && restrictedTabs.includes(activeTab)) {
       setActiveTab('enrollments');
       if (searchParams.get('section') && searchParams.get('section') !== 'enrollments' && searchParams.get('section') !== 'available') {
@@ -85,6 +86,9 @@ const StudentLMS = () => {
       const enrollmentsList = enrollmentsData || [];
       setEnrollments(enrollmentsList);
       setCourses(coursesData?.items || []);
+      const feeHistory = await lmsService.getFeeHistory().catch(() => ({ payments: [], obligations: [] }));
+      setPayments(feeHistory.payments || []);
+      setObligations(feeHistory.obligations || []);
       const hasVerifiedEnrollment = enrollmentsList.some((e) => e.verified_by_admin);
 
       if (hasVerifiedEnrollment) {
@@ -94,7 +98,6 @@ const StudentLMS = () => {
           announcementsData,
           sessionsData,
           performanceData,
-          paymentsData,
           calendarData,
         ] = await Promise.all([
           lmsService.getMyCertificates(),
@@ -102,7 +105,6 @@ const StudentLMS = () => {
           lmsService.getAnnouncements(),
           lmsService.getUpcomingSessions(),
           lmsService.getPerformanceDashboard(),
-          lmsService.getMyPayments(),
           lmsService.getCalendarEvents(),
         ]);
         setCertificates(certificatesData || []);
@@ -110,7 +112,6 @@ const StudentLMS = () => {
         setAnnouncements(announcementsData || []);
         setUpcomingSessions(sessionsData || []);
         setPerformance(performanceData);
-        setPayments(paymentsData || []);
         setCalendarEvents(calendarData || []);
       } else {
         setCertificates([]);
@@ -118,7 +119,6 @@ const StudentLMS = () => {
         setAnnouncements([]);
         setUpcomingSessions([]);
         setPerformance(null);
-        setPayments([]);
         setCalendarEvents([]);
       }
       setFailure(null);
@@ -241,8 +241,8 @@ const StudentLMS = () => {
           <CalendarTab events={calendarEvents} courses={courses} />
         )}
 
-        {hasVerifiedEnrollment && activeTab === 'payments' && (
-          <PaymentsTab payments={payments} courses={courses} />
+        {activeTab === 'payments' && (
+          <PaymentsTab payments={payments} obligations={obligations} courses={courses} />
         )}
 
         {hasVerifiedEnrollment && activeTab === 'certificates' && (
@@ -1424,12 +1424,13 @@ const CalendarTab = ({ events, courses }) => {
 };
 
 // Payments Tab Component
-const PaymentsTab = ({ payments, courses }) => {
+const PaymentsTab = ({ payments, obligations = [], courses }) => {
   const getCourseDetails = (courseId) => {
     return courses.find(c => c.id === courseId);
   };
+  const locked = obligations.filter((item) => item.access_restricted);
 
-  if (payments.length === 0) {
+  if (payments.length === 0 && obligations.length === 0) {
     return (
       <Card>
         <p className="text-center text-gray-500 py-8">No payment records found.</p>
@@ -1439,6 +1440,42 @@ const PaymentsTab = ({ payments, courses }) => {
 
   return (
     <div className="space-y-4">
+      {locked.length > 0 && (
+        <Card className="border border-amber-300 bg-amber-50">
+          <h3 className="font-semibold text-amber-900">Fee overdue</h3>
+          <p className="text-sm text-amber-800 mt-1">
+            Learning for the courses below is locked until the balance is paid or an administrator approves an access exception. You can still review fees and receipts here.
+          </p>
+          <ul className="mt-2 text-sm text-amber-900 space-y-1">
+            {locked.map((item) => (
+              <li key={item.enrollment_id}>
+                {item.course_title || 'Course'}: Rs. {Number(item.outstanding_balance || 0).toLocaleString()} outstanding
+                {item.fee_due_date ? `, due ${new Date(item.fee_due_date).toLocaleDateString()}` : ''}.
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
+      {obligations.map((item) => (
+        <Card key={item.enrollment_id}>
+          <h3 className="text-lg font-semibold text-gray-900">{item.course_title || 'Course fee'}</h3>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm text-gray-600 mt-2">
+            <div>Total: Rs. {Number(item.total_fee || 0).toLocaleString()}</div>
+            <div>Paid: Rs. {Number(item.amount_paid || 0).toLocaleString()}</div>
+            <div>Balance: Rs. {Number(item.outstanding_balance || 0).toLocaleString()}</div>
+            <div>Enrollment payment: {item.payment_status || 'pending'}</div>
+            <div>Due: {item.fee_due_date ? new Date(item.fee_due_date).toLocaleDateString() : 'No due date'}</div>
+          </div>
+          {item.receipt_available ? (
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Button className="text-sm" onClick={() => openPrivateUpload(item.receipt_url)}>View receipt</Button>
+              <Button className="text-sm" onClick={() => downloadPrivateUpload(item.receipt_url, 'payment-receipt')}>Download receipt</Button>
+            </div>
+          ) : (
+            <p className="text-sm text-gray-500 mt-3">No receipt has been uploaded for this enrollment.</p>
+          )}
+        </Card>
+      ))}
       {payments.map((payment) => {
         const course = payment.course_id ? getCourseDetails(payment.course_id) : null;
         
@@ -1490,13 +1527,16 @@ const PaymentsTab = ({ payments, courses }) => {
                     Paid on: {new Date(payment.payment_date).toLocaleDateString()}
                   </p>
                 )}
-                {payment.invoice_url && (
-                  <Button
-                    onClick={() => window.open(payment.invoice_url, '_blank')}
-                    className="mt-3 bg-blue-500 hover:bg-blue-600 text-sm"
-                  >
-                    Download Invoice
-                  </Button>
+                {payment.receipt_available ? (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <Button className="text-sm" onClick={() => openPrivateUpload(payment.receipt_url)}>View receipt</Button>
+                    <Button className="text-sm" onClick={() => downloadPrivateUpload(payment.receipt_url, 'payment-receipt')}>Download receipt</Button>
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-500 mt-3">No receipt is attached to this payment.</p>
+                )}
+                {payment.verification_status && (
+                  <p className="text-xs text-gray-500 mt-2">Enrollment verification: {payment.verification_status}</p>
                 )}
               </div>
             </div>
@@ -1565,6 +1605,7 @@ const EnrollmentsTab = ({ enrollments, courses, onContinue }) => {
             <div className="flex justify-between items-start">
               <div className="flex-1">
                 <h3 className="text-xl font-semibold text-gray-900 mb-2">{course.title}</h3>
+                <p className="text-sm text-gray-500 mb-2">Instructor: {course.instructor_name || 'Instructor not assigned'}</p>
                 <p className="text-gray-600 mb-3 line-clamp-2">{course.description}</p>
                 <div className="flex flex-wrap items-center gap-2 mb-3 text-sm text-gray-500">
                   <span>Enrolled: {new Date(enrollment.enrollment_date).toLocaleDateString()}</span>
@@ -1581,6 +1622,9 @@ const EnrollmentsTab = ({ enrollments, courses, onContinue }) => {
                     'bg-yellow-100 text-yellow-800'
                   }`}>
                     Payment: {enrollment.payment_status}
+                  </span>
+                  <span className="px-2 py-1 rounded text-xs font-medium bg-slate-100 text-slate-700">
+                    Due: {enrollment.fee_due_date ? new Date(enrollment.fee_due_date).toLocaleDateString() : 'No due date'}
                   </span>
                 </div>
                 {enrollment.enrollment_card_number && (

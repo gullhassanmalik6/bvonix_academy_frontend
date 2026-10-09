@@ -239,6 +239,9 @@ const AdminEnrollmentManagement = ({ focusId = null }) => {
                     }`}>
                       Payment: {enrollment.payment_status}
                     </span>
+                    <span className="px-2 py-1 rounded text-xs font-medium bg-slate-100 text-slate-700">
+                      Due: {enrollment.fee_due_date ? new Date(enrollment.fee_due_date).toLocaleDateString() : 'No due date'}
+                    </span>
                     {enrollment.workflow_state && (
                       <span className="px-2 py-1 rounded text-xs font-medium bg-slate-100 text-slate-800">
                         {enrollment.workflow_state.replaceAll('_', ' ')}
@@ -286,6 +289,8 @@ const AdminEnrollmentManagement = ({ focusId = null }) => {
                       {enrollment.emergency_contact_phone && ` (${enrollment.emergency_contact_phone})`}
                     </div>
                   )}
+
+                  <FeeTools enrollment={enrollment} onSaved={loadData} />
 
                   {/* Payment Receipt Section */}
                   {enrollment.payment_receipt_url ? (
@@ -455,5 +460,64 @@ const AdminEnrollmentManagement = ({ focusId = null }) => {
     </div>
   );
 };
+
+function FeeTools({ enrollment, onSaved }) {
+  const toast = useToast();
+  const [summary, setSummary] = useState(null);
+  const [due, setDue] = useState(enrollment.fee_due_date ? String(enrollment.fee_due_date).slice(0, 10) : '');
+  const [reason, setReason] = useState('');
+  const [expires, setExpires] = useState('');
+
+  useEffect(() => {
+    setDue(enrollment.fee_due_date ? String(enrollment.fee_due_date).slice(0, 10) : '');
+    adminService.getFeeSummary(enrollment.id).then(setSummary).catch(() => setSummary(null));
+  }, [enrollment.id, enrollment.fee_due_date]);
+
+  const saveDue = async () => {
+    try {
+      await adminService.setFeeDueDate(enrollment.id, due ? new Date(due).toISOString() : null);
+      toast.success('Fee due date saved');
+      onSaved();
+    } catch (err) {
+      toast.error(await getApiErrorMessage(err, 'Could not save the due date'));
+    }
+  };
+
+  const grant = async () => {
+    if (reason.trim().length < 5) {
+      toast.error('Enter a reason of at least 5 characters');
+      return;
+    }
+    try {
+      await adminService.grantAccessException(enrollment.id, reason.trim(), expires ? new Date(expires).toISOString() : null);
+      toast.success('Access exception saved. The fee was not marked paid.');
+      setReason('');
+      onSaved();
+    } catch (err) {
+      toast.error(await getApiErrorMessage(err, 'Could not save the access exception'));
+    }
+  };
+
+  return (
+    <div className="mb-3 p-3 bg-slate-50 border border-slate-200 rounded space-y-2">
+      <p className="text-sm font-medium text-slate-900">Fee balance</p>
+      {summary ? (
+        <p className="text-sm text-slate-700">
+          Total Rs. {Number(summary.total_fee).toLocaleString()} · Paid Rs. {Number(summary.amount_paid).toLocaleString()} · Balance Rs. {Number(summary.outstanding_balance).toLocaleString()}
+          {summary.access_restricted ? ' · Learning locked' : ' · Learning open'}
+        </p>
+      ) : (
+        <p className="text-sm text-slate-500">Balance is loading.</p>
+      )}
+      <div className="flex flex-wrap gap-2 items-end">
+        <Input label="Fee due date" type="date" value={due} onChange={(event) => setDue(event.target.value)} />
+        <Button type="button" className="text-sm" onClick={saveDue}>Save due date</Button>
+      </div>
+      <Input label="Access exception reason" value={reason} onChange={(event) => setReason(event.target.value)} />
+      <Input label="Exception expires (optional)" type="date" value={expires} onChange={(event) => setExpires(event.target.value)} />
+      <Button type="button" className="text-sm" onClick={grant}>Approve access without marking the fee paid</Button>
+    </div>
+  );
+}
 
 export default AdminEnrollmentManagement;

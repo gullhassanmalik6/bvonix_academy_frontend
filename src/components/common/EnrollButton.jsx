@@ -1,5 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
+import { internalPath } from '../../utils/safePath';
 import { FiZap, FiArrowRight } from 'react-icons/fi';
 
 const ICONS = {
@@ -80,7 +81,7 @@ const EnrollButton = ({
 
   if (to) {
     return (
-      <Link to={to} className={baseClass} aria-label={ariaLabel || text}>
+      <Link to={internalPath(to, '/register')} className={baseClass} aria-label={ariaLabel || text}>
         {content}
       </Link>
     );

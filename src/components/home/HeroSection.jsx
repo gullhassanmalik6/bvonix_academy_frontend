@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { siteSettingsService } from '../../services/siteSettingsService';
+import { isHttpUrl } from '../../utils/safePath';
 import EnrollButton from '../common/EnrollButton';
 
 const HeroSection = () => {
@@ -24,7 +25,7 @@ const HeroSection = () => {
 
   const headline = (settings.hero_headline || '').split('\n').filter(Boolean);
   const ctaLink = settings.hero_cta_link || '/register';
-  const isExternal = ctaLink.startsWith('http');
+  const isExternal = isHttpUrl(ctaLink);
   const ctaText = settings.hero_cta_text || 'Enroll Now';
 
   return (

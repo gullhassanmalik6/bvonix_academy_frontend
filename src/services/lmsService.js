@@ -201,6 +201,21 @@ export const lmsService = {
     return collectPaged('/lms/payments');
   },
 
+  async getFeeHistory() {
+    const response = await api.get('/lms/fee-history');
+    return response.data;
+  },
+
+  async checkIn(courseId) {
+    const response = await api.post('/lms/attendance/check-in', { course_id: courseId });
+    return response.data;
+  },
+
+  async getMyAttendanceClaims(courseId) {
+    const response = await api.get('/lms/attendance/claims', { params: courseId ? { course_id: courseId } : {} });
+    return response.data;
+  },
+
   // ==================== Forum ====================
 
   async getForumPosts(courseId) {

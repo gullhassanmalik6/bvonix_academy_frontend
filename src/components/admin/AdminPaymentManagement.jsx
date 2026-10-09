@@ -17,12 +17,18 @@ const AdminPaymentManagement = ({ focusId = null }) => {
   const listView = useCollectionView();
   const { start, succeed, fail } = listView;
   const [showForm, setShowForm] = useState(false);
+  const [enrollments, setEnrollments] = useState([]);
+  const [summary, setSummary] = useState(null);
+  const [requestId, setRequestId] = useState('');
+  const [saving, setSaving] = useState(false);
   const [formData, setFormData] = useState({
     student_id: '',
     course_id: '',
+    enrollment_id: '',
     amount: 0,
     currency: 'PKR',
-    payment_method: 'bank_transfer',
+    payment_method: 'cash',
+    payment_date: new Date().toISOString().slice(0, 10),
     scholarship_discount: 0,
     notes: '',
   });
@@ -31,15 +37,17 @@ const AdminPaymentManagement = ({ focusId = null }) => {
     start();
     try {
       setLoading(true);
-      const [payData, studentsData, coursesData] = await Promise.all([
+      const [payData, studentsData, coursesData, enrollmentData] = await Promise.all([
         adminService.getPayments(0, 100),
         adminService.getStudents(0, 100),
         adminService.getCourses(0, 100, false),
+        adminService.getEnrollments(0, 100),
       ]);
       const items = payData.items || [];
       setPayments(items);
       setStudents(studentsData.items || []);
       setCourses(coursesData.items || []);
+      setEnrollments(enrollmentData.items || []);
       succeed(items);
     } catch (err) {
       setPayments([]);
@@ -56,16 +64,35 @@ const AdminPaymentManagement = ({ focusId = null }) => {
     document.getElementById(`payment-${focusId}`)?.scrollIntoView({ block: 'center' });
   }, [focusId, loading, payments]);
 
+  const openForm = () => {
+    setRequestId(crypto.randomUUID());
+    setShowForm(true);
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (saving) return;
+    const submissionId = requestId || crypto.randomUUID();
+    if (!requestId) setRequestId(submissionId);
+    setSaving(true);
     try {
-      await adminService.createPayment({ ...formData, course_id: formData.course_id || null });
+      await adminService.createPayment({
+        ...formData,
+        course_id: formData.course_id || null,
+        enrollment_id: formData.enrollment_id || null,
+        payment_date: formData.payment_date ? new Date(formData.payment_date).toISOString() : null,
+        record_as_received: formData.payment_method === 'cash',
+        client_request_id: submissionId,
+      });
       toast.success('Payment created');
       setShowForm(false);
+      setRequestId('');
       loadData();
     } catch (err) {
       const failure = await interpretApiError(err, 'Failed to create payment');
       toast.error(failure.kind === 'denied' ? `Permission denied. ${failure.message}` : failure.message);
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -89,7 +116,7 @@ const AdminPaymentManagement = ({ focusId = null }) => {
     <div>
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-2xl font-bold">Payment Management</h2>
-        <Button onClick={() => setShowForm(!showForm)}>+ Add Payment</Button>
+        <Button onClick={() => (showForm ? setShowForm(false) : openForm())}>+ Add Payment</Button>
       </div>
       {showForm && (
         <Card className="mb-6">
@@ -110,16 +137,34 @@ const AdminPaymentManagement = ({ focusId = null }) => {
             </div>
             <Input label="Amount" type="number" value={formData.amount} onChange={(e) => setFormData((p) => ({ ...p, amount: parseFloat(e.target.value) }))} required />
             <div>
+              <label className="block text-sm font-medium mb-1">Enrollment</label>
+              <select className="w-full border rounded px-3 py-2" value={formData.enrollment_id} onChange={async (e) => {
+                const enrollment = enrollments.find((item) => item.id === e.target.value);
+                setFormData((p) => ({ ...p, enrollment_id: e.target.value, student_id: enrollment?.student_id || p.student_id, course_id: enrollment?.course_id || p.course_id }));
+                if (enrollment) setSummary(await adminService.getFeeSummary(enrollment.id).catch(() => null));
+              }}>
+                <option value="">Select an enrollment</option>
+                {enrollments.map((item) => <option key={item.id} value={item.id}>{item.id.slice(-6)} · {item.payment_status}</option>)}
+              </select>
+              {summary && (
+                <p className="text-sm text-gray-600 mt-1">Fee Rs. {summary.total_fee} · Paid Rs. {summary.amount_paid} · Balance Rs. {summary.outstanding_balance}</p>
+              )}
+            </div>
+            <div>
               <label className="block text-sm font-medium mb-1">Method</label>
               <select className="w-full border rounded px-3 py-2" value={formData.payment_method} onChange={(e) => setFormData((p) => ({ ...p, payment_method: e.target.value }))}>
-                <option value="cash">Cash</option>
+                <option value="cash">Cash / Offline</option>
                 <option value="bank_transfer">Bank Transfer</option>
-                <option value="card">Card</option>
                 <option value="online">Online</option>
+                <option value="card">Card</option>
               </select>
+              {formData.payment_method === 'cash' && (
+                <p className="text-xs text-gray-500 mt-1">Cash is recorded as received and does not need a receipt. A partial payment lowers the balance and leaves the enrollment unpaid. The enrollment is marked paid only when confirmed payments cover the full fee.</p>
+              )}
             </div>
+            <Input label="Payment date" type="date" value={formData.payment_date} onChange={(e) => setFormData((p) => ({ ...p, payment_date: e.target.value }))} />
             <Input label="Notes" value={formData.notes} onChange={(e) => setFormData((p) => ({ ...p, notes: e.target.value }))} />
-            <Button type="submit">Create</Button>
+            <Button type="submit" disabled={saving}>{saving ? 'Saving...' : 'Create'}</Button>
           </form>
         </Card>
       )}

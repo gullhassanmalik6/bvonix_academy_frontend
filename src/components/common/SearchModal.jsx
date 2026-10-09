@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { internalPath, pathSegment } from '../../utils/safePath';
 import { searchService } from '../../services/searchService';
 import { interpretApiError } from '../../services/api';
 import { DataState } from './DataState';
@@ -96,17 +97,17 @@ const SearchModal = ({ isOpen, onClose }) => {
 
   const handleResultClick = (result) => {
     // Navigate based on result type and URL
-    if (result.url) {
-      // Use URL from API if available
-      navigate(result.url);
+    const safeUrl = internalPath(result.url, null);
+    if (safeUrl) {
+      navigate(safeUrl);
     } else {
-      // Fallback navigation
-      if (result.type === 'course') {
-        navigate(`/courses/${result.id}`);
-      } else if (result.type === 'student') {
-        navigate(`/admin/students/${result.id}`);
-      } else if (result.type === 'user') {
-        navigate(`/admin/users/${result.id}`);
+      const id = pathSegment(result.id);
+      if (id && result.type === 'course') {
+        navigate(`/courses/${id}`);
+      } else if (id && result.type === 'student') {
+        navigate(`/admin/students/${id}`);
+      } else if (id && result.type === 'user') {
+        navigate(`/admin/users/${id}`);
       }
     }
     onClose();

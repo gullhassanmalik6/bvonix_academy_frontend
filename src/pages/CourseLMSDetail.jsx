@@ -11,7 +11,7 @@ import Breadcrumb from '../components/common/Breadcrumb';
 import StudentDashboardLayout from '../components/layout/StudentDashboardLayout';
 import { CardSkeleton, ListSkeleton } from '../components/common/Skeleton';
 import { ErrorState, PermissionDenied } from '../components/common/DataState';
-import { interpretApiError } from '../services/api';
+import { getFileUrl, interpretApiError } from '../services/api';
 
 function blockedSection(failure, onRetry) {
   if (!failure) return null;
@@ -294,12 +294,17 @@ const CourseLMSDetail = () => {
               <Button onClick={() => setActiveTab('materials')}>Open lessons</Button>
             </div>
             <div className="space-y-4">
+              {course.image_url ? (
+                <img src={getFileUrl(course.image_url)} alt="" className="w-full max-h-56 object-cover rounded-lg bg-gray-100" onError={(event) => { event.currentTarget.style.display = 'none'; }} />
+              ) : (
+                <div className="w-full h-32 rounded-lg bg-gray-100 flex items-center justify-center text-sm text-gray-500">No course image</div>
+              )}
               <div>
                 <h3 className="font-semibold mb-2">Course Details</h3>
                 <ul className="list-disc list-inside space-y-1 text-gray-600">
                   <li>Duration: {course.duration_hours} hours</li>
                   <li>Price: Rs. {course.price.toLocaleString()}</li>
-                  <li>Instructor ID: {course.instructor_id}</li>
+                  <li>Instructor: {course.instructor_name || 'Instructor not assigned'}</li>
                 </ul>
               </div>
               {enrollment && (
@@ -435,10 +440,17 @@ const AttendanceTab = ({ attendance, stats, courseId, failure, onRetry }) => {
   const [correctingId, setCorrectingId] = useState(null);
   const [correctionReason, setCorrectionReason] = useState('');
   const [requestedStatus, setRequestedStatus] = useState('present');
+  const [claims, setClaims] = useState([]);
+  const [checkingIn, setCheckingIn] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     if (!courseId) return undefined;
+    lmsService.getMyAttendanceClaims(courseId).then((data) => {
+      if (!cancelled) setClaims(data.items || data || []);
+    }).catch(() => {
+      if (!cancelled) setClaims([]);
+    });
     lmsService.getMyAttendanceCorrections(courseId)
       .then((data) => {
         if (!cancelled) setCorrections(data.items || []);
@@ -498,16 +510,57 @@ const AttendanceTab = ({ attendance, stats, courseId, failure, onRetry }) => {
     }
   };
 
+  const todayClaim = claims.find((item) => {
+    const day = new Date(item.session_date);
+    const now = new Date();
+    return day.getUTCFullYear() === now.getUTCFullYear() && day.getUTCMonth() === now.getUTCMonth() && day.getUTCDate() === now.getUTCDate();
+  });
+  const submitCheckIn = async () => {
+    try {
+      setCheckingIn(true);
+      const created = await lmsService.checkIn(courseId);
+      setClaims((current) => [created, ...current]);
+      toast.success('Check-in submitted. It stays pending until an administrator verifies it.');
+    } catch (err) {
+      const failure = await interpretApiError(err, 'Check-in was not saved');
+      toast.error(failure.message);
+    } finally {
+      setCheckingIn(false);
+    }
+  };
+  const checkInCard = (
+    <Card>
+      <h3 className="text-lg font-semibold mb-2">Today&apos;s check-in</h3>
+      <p className="text-sm text-gray-600 mb-3">A check-in is a request. It is not official attendance until an administrator approves it.</p>
+      {todayClaim ? (
+        <p className="text-sm font-medium">Status: {todayClaim.status === 'pending_verification' ? 'Pending verification' : todayClaim.status}</p>
+      ) : (
+        <Button onClick={submitCheckIn} disabled={checkingIn}>{checkingIn ? 'Submitting...' : 'Submit check-in'}</Button>
+      )}
+      {claims.length > 0 && (
+        <ul className="mt-3 text-sm text-gray-600 space-y-1">
+          {claims.map((item) => (
+            <li key={item.id}>{new Date(item.session_date).toLocaleDateString()} — {item.status === 'pending_verification' ? 'Pending verification' : item.status}</li>
+          ))}
+        </ul>
+      )}
+    </Card>
+  );
+
   if (attendance.length === 0) {
     return (
-      <Card>
-        <p className="text-center text-gray-500 py-8">No attendance records available yet.</p>
-      </Card>
+      <div className="space-y-4">
+        {checkInCard}
+        <Card>
+          <p className="text-center text-gray-500 py-8">No official attendance records yet. A pending check-in is not counted as present.</p>
+        </Card>
+      </div>
     );
   }
 
   return (
     <div className="space-y-4">
+      {checkInCard}
       {stats && (
         <Card>
           <h3 className="text-lg font-semibold mb-4">Attendance Statistics</h3>

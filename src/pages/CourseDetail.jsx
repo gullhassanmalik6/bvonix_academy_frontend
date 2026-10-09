@@ -5,7 +5,7 @@ import { siteSettingsService } from '../services/siteSettingsService';
 import { useAuth } from '../context/AuthContext';
 import Button from '../components/common/Button';
 import { ErrorState, PermissionDenied } from '../components/common/DataState';
-import { interpretApiError } from '../services/api';
+import { getFileUrl, interpretApiError } from '../services/api';
 import EnrollButton from '../components/common/EnrollButton';
 import { formatPKR } from '../utils/helpers';
 import { getCourseCardTheme, COURSE_CARD_ICONS } from '../utils/courseCardTheme';
@@ -315,6 +315,11 @@ const CourseDetail = () => {
 
         <aside className="order-1 lg:order-2 lg:sticky lg:top-6">
           <div className="bg-white rounded-2xl border border-gray-200 shadow-md p-6">
+            {course.image_url ? (
+              <img src={getFileUrl(course.image_url)} alt="" className="mb-4 w-full h-40 object-cover rounded-xl bg-gray-100" onError={(event) => { event.currentTarget.style.display = 'none'; }} />
+            ) : (
+              <div className="mb-4 w-full h-24 rounded-xl bg-gray-100 flex items-center justify-center text-sm text-gray-500">No course image</div>
+            )}
             <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Fee</p>
             <p className="mt-1 text-3xl font-bold text-gray-900">
               {fee || <span className="text-lg font-medium text-gray-500">Not listed</span>}

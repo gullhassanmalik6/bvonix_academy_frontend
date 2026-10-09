@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { adminService } from '../../services/adminService';
-import { interpretApiError } from '../../services/api';
+import { uploadService } from '../../services/uploadService';
+import { getFileUrl, interpretApiError } from '../../services/api';
 import Button from '../common/Button';
 import Card from '../common/Card';
 import EmptyState from '../common/EmptyState';
@@ -8,6 +9,8 @@ import { DataState, useCollectionView } from '../common/DataState';
 
 const AdminCourseManagement = () => {
   const [courses, setCourses] = useState([]);
+  const [instructors, setInstructors] = useState([]);
+  const [imageError, setImageError] = useState('');
   const listView = useCollectionView();
   const { start, succeed, fail } = listView;
   const [actionError, setActionError] = useState(null);
@@ -20,14 +23,20 @@ const AdminCourseManagement = () => {
     duration_hours: 0,
     price: 0,
     is_published: false,
+    image_url: '',
+    clear_image: false,
   });
 
   const loadCourses = useCallback(async () => {
     start();
     try {
-      const response = await adminService.getCourses(0, 100, false);
+      const [response, instructorPage] = await Promise.all([
+        adminService.getCourses(0, 100, false),
+        adminService.getInstructors(0, 100),
+      ]);
       const items = response.items || [];
       setCourses(items);
+      setInstructors(instructorPage.items || []);
       succeed(items);
     } catch (err) {
       setCourses([]);
@@ -42,10 +51,20 @@ const AdminCourseManagement = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
+      const payload = {
+        title: formData.title,
+        description: formData.description,
+        instructor_id: formData.instructor_id,
+        duration_hours: formData.duration_hours,
+        price: formData.price,
+        is_published: formData.is_published,
+      };
+      if (editingCourse && formData.clear_image) payload.clear_image = true;
+      else if (formData.image_url) payload.image_url = formData.image_url;
       if (editingCourse) {
-        await adminService.updateCourse(editingCourse.id, formData);
+        await adminService.updateCourse(editingCourse.id, payload);
       } else {
-        await adminService.createCourse(formData);
+        await adminService.createCourse(payload);
       }
       setShowForm(false);
       setEditingCourse(null);
@@ -66,6 +85,8 @@ const AdminCourseManagement = () => {
       duration_hours: course.duration_hours,
       price: course.price,
       is_published: course.is_published,
+      image_url: course.image_url || '',
+      clear_image: false,
     });
     setShowForm(true);
   };
@@ -91,7 +112,30 @@ const AdminCourseManagement = () => {
       duration_hours: 0,
       price: 0,
       is_published: false,
+      image_url: '',
+      clear_image: false,
     });
+    setImageError('');
+  };
+
+  const onImage = async (file) => {
+    setImageError('');
+    if (!file) return;
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+      setImageError('Use a JPEG, PNG, or WebP image.');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setImageError('Image must be 5 MB or smaller.');
+      return;
+    }
+    try {
+      const uploaded = await uploadService.uploadCourseImage(file);
+      setFormData((current) => ({ ...current, image_url: uploaded.url, clear_image: false }));
+    } catch (err) {
+      const failure = await interpretApiError(err, 'The image could not be uploaded.');
+      setImageError(failure.message);
+    }
   };
 
   return (
@@ -142,15 +186,21 @@ const AdminCourseManagement = () => {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Instructor ID
+                  Instructor
                 </label>
-                <input
-                  type="text"
+                <select
                   required
                   value={formData.instructor_id}
                   onChange={(e) => setFormData({ ...formData, instructor_id: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
+                >
+                  <option value="">Select an instructor</option>
+                  {instructors.map((instructor) => (
+                    <option key={instructor.id} value={instructor.id}>
+                      {instructor.full_name || 'Instructor not assigned'}
+                    </option>
+                  ))}
+                </select>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -192,6 +242,19 @@ const AdminCourseManagement = () => {
                   <span className="text-sm font-medium text-gray-700">Published</span>
                 </label>
               </div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Course image (optional)</label>
+              <input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => onImage(event.target.files?.[0])} />
+              {imageError && <p className="text-sm text-red-600 mt-1">{imageError}</p>}
+              {formData.image_url && (
+                <img src={getFileUrl(formData.image_url)} alt="" className="mt-2 h-24 w-40 object-cover rounded" />
+              )}
+              {editingCourse && (formData.image_url || editingCourse.image_url) && (
+                <Button type="button" className="mt-2 text-sm" onClick={() => setFormData((current) => ({ ...current, clear_image: true, image_url: '' }))}>
+                  Remove image
+                </Button>
+              )}
             </div>
             <div className="flex space-x-3">
               <Button type="submit">
@@ -236,6 +299,7 @@ const AdminCourseManagement = () => {
                     )}
                   </div>
                   <p className="text-gray-600 mb-3 line-clamp-2">{course.description}</p>
+                  <p className="text-sm text-gray-500 mb-2">Instructor: {course.instructor_name || 'Instructor not assigned'}</p>
                   <div className="flex items-center space-x-4 text-sm text-gray-500">
                     <span>Duration: {course.duration_hours} hours</span>
                     <span>Price: Rs. {course.price.toLocaleString()}</span>

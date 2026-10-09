@@ -85,6 +85,18 @@ export async function fetchPrivateObjectUrl(relativePath) {
   return window.URL.createObjectURL(response.data);
 }
 
+export async function downloadPrivateUpload(relativePath, filename = 'receipt') {
+  const located = privateUploadKind(relativePath);
+  if (!located) return;
+  const objectUrl = await fetchPrivateObjectUrl(relativePath);
+  if (!objectUrl) return;
+  const link = document.createElement('a');
+  link.href = objectUrl;
+  link.download = filename;
+  link.click();
+  window.setTimeout(() => window.URL.revokeObjectURL(objectUrl), 60000);
+}
+
 export async function openPrivateUpload(relativePath) {
   const located = privateUploadKind(relativePath);
   if (!located) {
