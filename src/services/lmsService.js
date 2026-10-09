@@ -1,5 +1,28 @@
 import api from './api';
 
+function isPage(data) {
+  return Boolean(data && Array.isArray(data.items) && typeof data.total === 'number');
+}
+
+/** Walk skip/limit pages and return the complete array. Each HTTP response stays at most 100 rows. */
+async function collectPaged(path, params = {}) {
+  const limit = 100;
+  let skip = 0;
+  let items = [];
+  let more = true;
+  while (more) {
+    const { data } = await api.get(path, { params: { ...params, skip, limit } });
+    if (!isPage(data)) return data;
+    const page = data.items;
+    items = items.concat(page);
+    if (page.length === 0 || skip + page.length >= data.total) {
+      more = false;
+      return items;
+    }
+    skip += page.length;
+  }
+}
+
 export const lmsService = {
   // ==================== Enrollment ====================
   
@@ -46,8 +69,7 @@ export const lmsService = {
   },
 
   async getMyEnrollments() {
-    const response = await api.get('/lms/enrollments');
-    return response.data;
+    return collectPaged('/lms/enrollments');
   },
 
   async checkLMSAccess() {
@@ -58,20 +80,24 @@ export const lmsService = {
   // ==================== Results ====================
 
   async getMyResults(courseId) {
-    const response = await api.get(`/lms/results/${courseId}`);
-    return response.data;
+    return collectPaged(`/lms/results/${courseId}`);
   },
 
   async getAllMyResults() {
-    const response = await api.get('/lms/results');
-    return response.data;
+    const items = await collectPaged('/lms/results');
+    const grouped = {};
+    for (const result of items) {
+      const key = result.enrollment_id || result.course_id;
+      if (!grouped[key]) grouped[key] = [];
+      grouped[key].push(result);
+    }
+    return grouped;
   },
 
   // ==================== Attendance ====================
 
   async getMyAttendance(courseId) {
-    const response = await api.get(`/lms/attendance/${courseId}`);
-    return response.data;
+    return collectPaged(`/lms/attendance/${courseId}`);
   },
 
   async getAttendanceStats(courseId) {
@@ -82,8 +108,7 @@ export const lmsService = {
   // ==================== Certificates ====================
 
   async getMyCertificates() {
-    const response = await api.get('/lms/certificates');
-    return response.data;
+    return collectPaged('/lms/certificates');
   },
 
   async getCourseCertificate(courseId) {
@@ -94,13 +119,11 @@ export const lmsService = {
   // ==================== Scholarships ====================
 
   async getMyScholarships() {
-    const response = await api.get('/lms/scholarships');
-    return response.data;
+    return collectPaged('/lms/scholarships');
   },
 
   async getCourseScholarships(courseId) {
-    const response = await api.get(`/lms/scholarships/${courseId}`);
-    return response.data;
+    return collectPaged(`/lms/scholarships/${courseId}`);
   },
 
   async getScholarshipDetails(scholarshipId) {
@@ -135,15 +158,13 @@ export const lmsService = {
   // ==================== Course Materials ====================
 
   async getCourseMaterials(courseId) {
-    const response = await api.get(`/lms/courses/${courseId}/materials`);
-    return response.data;
+    return collectPaged(`/lms/courses/${courseId}/materials`);
   },
 
   // ==================== Assignments ====================
 
   async getCourseAssignments(courseId) {
-    const response = await api.get(`/lms/courses/${courseId}/assignments`);
-    return response.data;
+    return collectPaged(`/lms/courses/${courseId}/assignments`);
   },
 
   async getMySubmission(assignmentId) {
@@ -159,36 +180,31 @@ export const lmsService = {
   // ==================== Live Sessions ====================
 
   async getCourseSessions(courseId) {
-    const response = await api.get(`/lms/courses/${courseId}/sessions`);
-    return response.data;
+    return collectPaged(`/lms/courses/${courseId}/sessions`);
   },
 
   async getUpcomingSessions(courseId = null) {
     const params = courseId ? { course_id: courseId } : {};
-    const response = await api.get('/lms/sessions/upcoming', { params });
-    return response.data;
+    return collectPaged('/lms/sessions/upcoming', params);
   },
 
   // ==================== Announcements ====================
 
   async getAnnouncements(courseId = null) {
     const params = courseId ? { course_id: courseId } : {};
-    const response = await api.get('/lms/announcements', { params });
-    return response.data;
+    return collectPaged('/lms/announcements', params);
   },
 
   // ==================== Payments ====================
 
   async getMyPayments() {
-    const response = await api.get('/lms/payments');
-    return response.data;
+    return collectPaged('/lms/payments');
   },
 
   // ==================== Forum ====================
 
   async getForumPosts(courseId) {
-    const response = await api.get(`/lms/courses/${courseId}/forum`);
-    return response.data;
+    return collectPaged(`/lms/courses/${courseId}/forum`);
   },
 
   async getForumPost(postId) {
@@ -197,8 +213,7 @@ export const lmsService = {
   },
 
   async getForumReplies(postId) {
-    const response = await api.get(`/lms/forum/posts/${postId}/replies`);
-    return response.data;
+    return collectPaged(`/lms/forum/posts/${postId}/replies`);
   },
 
   async createForumPost(data) {
@@ -216,15 +231,53 @@ export const lmsService = {
   // ==================== Student Dashboard ====================
 
   async getDashboard() {
-    const response = await api.get('/lms/dashboard');
-    return response.data;
+    const limit = 100;
+    let skip = 0;
+    let enrollments = [];
+    const mentors = new Map();
+    let total = 0;
+    let more = true;
+    while (more) {
+      const { data } = await api.get('/lms/dashboard', { params: { skip, limit } });
+      const page = data?.enrollments || [];
+      total = typeof data?.total === 'number' ? data.total : page.length;
+      enrollments = enrollments.concat(page);
+      for (const mentor of data?.mentors || []) {
+        if (mentor?.id) mentors.set(mentor.id, mentor);
+      }
+      if (skip + limit >= total) {
+        more = false;
+        return { enrollments, mentors: [...mentors.values()], total };
+      }
+      skip += limit;
+    }
   },
 
   // ==================== Performance Dashboard ====================
 
   async getPerformanceDashboard() {
-    const response = await api.get('/lms/performance/dashboard');
-    return response.data;
+    const limit = 100;
+    let skip = 0;
+    let merged = null;
+    let more = true;
+    while (more) {
+      const { data } = await api.get('/lms/performance/dashboard', { params: { skip, limit } });
+      if (!merged) {
+        merged = {
+          ...data,
+          course_performance: [],
+          attendance_summary: {},
+        };
+      }
+      merged.course_performance.push(...(data.course_performance || []));
+      Object.assign(merged.attendance_summary, data.attendance_summary || {});
+      const total = data.total_courses ?? 0;
+      if (skip + limit >= total) {
+        more = false;
+        return merged;
+      }
+      skip += limit;
+    }
   },
 
   // ==================== Calendar Events ====================
@@ -233,7 +286,6 @@ export const lmsService = {
     const params = {};
     if (startDate) params.start_date = startDate;
     if (endDate) params.end_date = endDate;
-    const response = await api.get('/lms/calendar/events', { params });
-    return response.data;
+    return collectPaged('/lms/calendar/events', params);
   },
 };

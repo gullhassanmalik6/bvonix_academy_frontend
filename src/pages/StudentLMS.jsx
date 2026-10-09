@@ -5,7 +5,7 @@ import { lmsService } from '../services/lmsService';
 import { downloadCardPreviewPdf, fetchPreviewCardData, openCardPreviewPdf } from '../utils/cardPreviewPdf';
 import { courseService } from '../services/courseService';
 import { siteSettingsService } from '../services/siteSettingsService';
-import { getApiErrorMessage, getFileUrl, interpretApiError } from '../services/api';
+import { getApiErrorMessage, interpretApiError, openPrivateUpload } from '../services/api';
 import { DataState, ErrorState, PermissionDenied } from '../components/common/DataState';
 import EnrollmentWizard from '../components/enrollment/EnrollmentWizard';
 import { enrollmentWorkflowState, nextExpectedAction } from '../enrollment/enrollmentWizard';
@@ -1614,7 +1614,7 @@ const EnrollmentsTab = ({ enrollments, courses, onContinue }) => {
                       ✓ Payment Receipt Uploaded
                     </p>
                     <Button
-                      onClick={() => window.open(getFileUrl(enrollment.payment_receipt_url), '_blank')}
+                      onClick={() => openPrivateUpload(enrollment.payment_receipt_url)}
                       className="bg-green-500 hover:bg-green-600 text-sm px-3 py-1"
                     >
                       View Receipt

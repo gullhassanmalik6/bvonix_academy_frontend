@@ -255,8 +255,23 @@ export const adminService = {
   },
 
   async getSubmissions(assignmentId) {
-    const response = await api.get(`/admin/assignments/${assignmentId}/submissions`);
-    return response.data;
+    const limit = 100;
+    let skip = 0;
+    let items = [];
+    let more = true;
+    while (more) {
+      const response = await api.get(`/admin/assignments/${assignmentId}/submissions`, {
+        params: { skip, limit },
+      });
+      const data = response.data;
+      if (!data || !Array.isArray(data.items) || typeof data.total !== 'number') return data;
+      items = items.concat(data.items);
+      if (data.items.length === 0 || skip + data.items.length >= data.total) {
+        more = false;
+        return items;
+      }
+      skip += data.items.length;
+    }
   },
 
   async gradeSubmission(submissionId, marksObtained, feedback = null) {

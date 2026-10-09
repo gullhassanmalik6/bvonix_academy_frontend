@@ -51,13 +51,52 @@ const api = axios.create({
   },
 });
 
-// Helper to get full URL for file access
+// Helper to get full URL for public file access
 export const getFileUrl = (relativePath) => {
   if (!relativePath) return null;
   if (relativePath.startsWith('http')) return relativePath;
   const baseUrl = API_BASE_URL.replace('/api', '');
   return `${baseUrl}${relativePath}`;
 };
+
+const PRIVATE_UPLOADS = {
+  '/uploads/payment_receipts/': 'payment-receipts',
+  '/uploads/profile_images/': 'profile-images',
+  '/uploads/enrollment_cards/': 'enrollment-cards',
+};
+
+export function privateUploadKind(relativePath) {
+  if (!relativePath || typeof relativePath !== 'string') return null;
+  const path = relativePath.split('?')[0];
+  const match = Object.entries(PRIVATE_UPLOADS).find(([prefix]) => path.startsWith(prefix));
+  if (!match) return null;
+  const filename = path.slice(match[0].length);
+  if (!filename || filename.includes('/') || filename.includes('..')) return null;
+  return { kind: match[1], filename };
+}
+
+export async function fetchPrivateObjectUrl(relativePath) {
+  const located = privateUploadKind(relativePath);
+  if (!located) return null;
+  const response = await api.get(
+    `/uploads/private/${located.kind}/${encodeURIComponent(located.filename)}`,
+    { responseType: 'blob' },
+  );
+  return window.URL.createObjectURL(response.data);
+}
+
+export async function openPrivateUpload(relativePath) {
+  const located = privateUploadKind(relativePath);
+  if (!located) {
+    const url = getFileUrl(relativePath);
+    if (url) window.open(url, '_blank', 'noopener,noreferrer');
+    return;
+  }
+  const objectUrl = await fetchPrivateObjectUrl(relativePath);
+  if (!objectUrl) return;
+  window.open(objectUrl, '_blank', 'noopener,noreferrer');
+  window.setTimeout(() => window.URL.revokeObjectURL(objectUrl), 60000);
+}
 
 // Request interceptor - add auth token
 api.interceptors.request.use(

@@ -3,7 +3,7 @@ import { toPng } from 'html-to-image';
 import { jsPDF } from 'jspdf';
 import CardWrapper from '../components/cards/CardWrapper';
 import cardService from '../services/cardService';
-import { getFileUrl } from '../services/api';
+import { fetchPrivateObjectUrl, getFileUrl, privateUploadKind } from '../services/api';
 
 function sleep(ms) {
   return new Promise((resolve) => {
@@ -23,6 +23,18 @@ function blobToDataUrl(blob) {
 async function inlineCrossOriginImage(url) {
   if (!url || String(url).startsWith('data:') || String(url).startsWith('blob:')) {
     return url;
+  }
+  if (privateUploadKind(url)) {
+    try {
+      const objectUrl = await fetchPrivateObjectUrl(url);
+      if (!objectUrl) return url;
+      const response = await fetch(objectUrl);
+      const dataUrl = await blobToDataUrl(await response.blob());
+      window.URL.revokeObjectURL(objectUrl);
+      return dataUrl;
+    } catch {
+      return url;
+    }
   }
   const absolute = String(url).startsWith('http') ? url : getFileUrl(url);
   if (!absolute || absolute.startsWith(window.location.origin)) {

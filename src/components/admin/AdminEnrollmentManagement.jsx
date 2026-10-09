@@ -4,7 +4,7 @@ import { adminService } from '../../services/adminService';
 import { downloadCardPreviewPdf, fetchPreviewCardData } from '../../utils/cardPreviewPdf';
 import { courseService } from '../../services/courseService';
 import { useToast } from '../../context/ToastContext';
-import { getApiErrorMessage, getFileUrl } from '../../services/api';
+import { getApiErrorMessage, openPrivateUpload } from '../../services/api';
 import { DataState, useCollectionView } from '../common/DataState';
 import EmptyState from '../common/EmptyState';
 import Button from '../common/Button';
@@ -294,7 +294,7 @@ const AdminEnrollmentManagement = ({ focusId = null }) => {
                         ✓ Payment Receipt Uploaded
                       </p>
                       <Button
-                        onClick={() => window.open(getFileUrl(enrollment.payment_receipt_url), '_blank')}
+                        onClick={() => openPrivateUpload(enrollment.payment_receipt_url)}
                         className="bg-green-500 hover:bg-green-600 text-sm"
                       >
                         View Payment Receipt
