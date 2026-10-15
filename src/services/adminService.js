@@ -255,8 +255,23 @@ export const adminService = {
   },
 
   async getSubmissions(assignmentId) {
-    const response = await api.get(`/admin/assignments/${assignmentId}/submissions`);
-    return response.data;
+    const limit = 100;
+    let skip = 0;
+    let items = [];
+    let more = true;
+    while (more) {
+      const response = await api.get(`/admin/assignments/${assignmentId}/submissions`, {
+        params: { skip, limit },
+      });
+      const data = response.data;
+      if (!data || !Array.isArray(data.items) || typeof data.total !== 'number') return data;
+      items = items.concat(data.items);
+      if (data.items.length === 0 || skip + data.items.length >= data.total) {
+        more = false;
+        return items;
+      }
+      skip += data.items.length;
+    }
   },
 
   async gradeSubmission(submissionId, marksObtained, feedback = null) {
@@ -324,6 +339,38 @@ export const adminService = {
 
   async createPayment(data) {
     const response = await api.post('/admin/payments', data);
+    return response.data;
+  },
+
+  async getFeeSummary(enrollmentId) {
+    const response = await api.get(`/admin/enrollments/${enrollmentId}/fee-summary`);
+    return response.data;
+  },
+
+  async setFeeDueDate(enrollmentId, feeDueDate) {
+    const response = await api.patch(`/admin/enrollments/${enrollmentId}/fee-due-date`, {
+      fee_due_date: feeDueDate,
+    });
+    return response.data;
+  },
+
+  async grantAccessException(enrollmentId, reason, expiresAt) {
+    const response = await api.post(`/admin/enrollments/${enrollmentId}/access-exception`, {
+      reason,
+      expires_at: expiresAt || null,
+    });
+    return response.data;
+  },
+
+  async getAttendanceClaims(courseId, sessionDate) {
+    const response = await api.get('/admin/attendance/claims', {
+      params: { course_id: courseId, session_date: sessionDate },
+    });
+    return response.data;
+  },
+
+  async decideAttendanceClaim(claimId, action, reason) {
+    const response = await api.post(`/admin/attendance/claims/${claimId}/decide`, { action, reason });
     return response.data;
   },
 

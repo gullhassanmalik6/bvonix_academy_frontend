@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { FaWhatsapp, FaFacebookF, FaTwitter, FaEnvelope, FaYoutube, FaInstagram } from 'react-icons/fa';
 import { FiChevronDown, FiPhone, FiMapPin } from 'react-icons/fi';
 import { siteSettingsService } from '../../services/siteSettingsService';
+import { internalPath } from '../../utils/safePath';
 import SiteLogo from './SiteLogo';
 
 const SOCIAL_ICONS = {
@@ -233,8 +234,9 @@ const Footer = () => {
               {legalLinks.map((link, i) => {
                 const url = link.url || '#';
                 const isExternal = url.startsWith('http://') || url.startsWith('https://');
-                const href = isExternal ? url : (url.startsWith('/') ? url : `/${url}`);
+                const href = isExternal ? url : internalPath(url.startsWith('/') ? url : `/${url}`, null);
                 const className = 'footer-link text-sm text-white/70 transition-colors duration-200 hover:text-primary-300 hover:underline';
+                if (!isExternal && !href) return null;
                 return isExternal ? (
                   <a key={i} href={href} target="_blank" rel="noopener noreferrer" className={className}>
                     {link.label || 'Link'}

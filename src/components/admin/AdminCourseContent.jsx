@@ -305,7 +305,7 @@ export default function AdminCourseContent({ focus = null }) {
                 <Input label="End" type="datetime-local" value={formData.end_time || ''} onChange={(e) => setField('end_time', e.target.value)} required />
                 <Input label="Meeting Link" value={formData.meeting_link || ''} onChange={(e) => setField('meeting_link', e.target.value)} />
                 <Input label="Location" value={formData.location || ''} onChange={(e) => setField('location', e.target.value)} />
-                <SelectField label="Instructor" value={formData.instructor_id || ''} onChange={(e) => setField('instructor_id', e.target.value)} options={instructors.map((i) => ({ value: i.id, label: `Instructor ${i.id.slice(-6)}` }))} />
+                <SelectField label="Instructor" value={formData.instructor_id || ''} onChange={(e) => setField('instructor_id', e.target.value)} options={instructors.map((i) => ({ value: i.id, label: i.full_name || i.specialization || 'Instructor not assigned' }))} />
               </>
             )}
             {activeSubTab === 'announcements' && (

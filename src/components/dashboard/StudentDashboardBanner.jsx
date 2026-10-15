@@ -1,6 +1,7 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FiPlay } from 'react-icons/fi';
+import { internalPath, isHttpUrl } from '../../utils/safePath';
 
 /** Banner - text + Join Now only. YouTube displays separately in course content below. */
 const StudentDashboardBanner = ({ title, ctaText, ctaLink = '/courses' }) => {
@@ -20,7 +21,13 @@ const StudentDashboardBanner = ({ title, ctaText, ctaLink = '/courses' }) => {
           {title || 'Sharpen Your Skills With Professional Online Courses'}
         </h2>
         <button
-          onClick={() => navigate(ctaLink)}
+          onClick={() => {
+            if (isHttpUrl(ctaLink)) {
+              window.location.assign(ctaLink.trim());
+              return;
+            }
+            navigate(internalPath(ctaLink, '/courses'));
+          }}
           className="inline-flex items-center gap-2 px-5 py-2.5 bg-white border-2 border-white text-primary-500 font-semibold rounded-lg hover:bg-primary-50 transition-colors"
         >
           <FiPlay className="w-4 h-4" />

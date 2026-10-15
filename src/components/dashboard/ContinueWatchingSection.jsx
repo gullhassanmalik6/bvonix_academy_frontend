@@ -1,6 +1,7 @@
 import React, { useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FiChevronLeft, FiChevronRight, FiHeart, FiPlay } from 'react-icons/fi';
+import { getFileUrl } from '../../services/api';
 
 const ContinueWatchingSection = ({ enrollments = [] }) => {
   const navigate = useNavigate();
@@ -51,11 +52,12 @@ const ContinueWatchingSection = ({ enrollments = [] }) => {
             >
               {/* Video thumbnail */}
               <div className="relative h-36 bg-gray-800 flex items-center justify-center overflow-hidden">
-                {e.thumbnail_url ? (
+                {e.thumbnail_url || e.image_url ? (
                   <img
-                    src={e.thumbnail_url}
+                    src={String(e.thumbnail_url || e.image_url).startsWith('http') ? (e.thumbnail_url || e.image_url) : getFileUrl(e.thumbnail_url || e.image_url)}
                     alt=""
                     className="w-full h-full object-cover"
+                    onError={(event) => { event.currentTarget.style.display = 'none'; }}
                   />
                 ) : (
                   <span className="text-4xl text-gray-500">📚</span>

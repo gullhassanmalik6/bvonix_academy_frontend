@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { fetchPrivateObjectUrl, privateUploadKind } from '../../services/api';
 import { lmsService } from '../../services/lmsService';
 import { uploadService } from '../../services/uploadService';
 import Button from '../common/Button';
@@ -61,6 +62,27 @@ const EnrollmentWizard = ({
   const [form, setForm] = useState(formFromEnrollment(startingEnrollment));
   const [profileImageFile, setProfileImageFile] = useState(null);
   const [profilePreview, setProfilePreview] = useState(startingEnrollment?.profile_image_url || null);
+
+  useEffect(() => {
+    const source = startingEnrollment?.profile_image_url;
+    if (!source || !privateUploadKind(source)) return undefined;
+    let cancelled = false;
+    let objectUrl = null;
+    fetchPrivateObjectUrl(source)
+      .then((url) => {
+        if (cancelled) {
+          if (url) window.URL.revokeObjectURL(url);
+          return;
+        }
+        objectUrl = url;
+        if (url) setProfilePreview(url);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+      if (objectUrl) window.URL.revokeObjectURL(objectUrl);
+    };
+  }, [startingEnrollment?.profile_image_url]);
   const [receiptFile, setReceiptFile] = useState(null);
   const [enrollment, setEnrollment] = useState(startingEnrollment);
   const [errors, setErrors] = useState({});

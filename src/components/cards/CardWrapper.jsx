@@ -3,7 +3,7 @@ import { QRCodeCanvas } from 'qrcode.react';
 import FrontCard from './FrontCard';
 import BackCard from './BackCard';
 import { CARD_PREVIEW_SCALE, CARD_THEME, defaultCardData } from './cardTheme';
-import { getFileUrl } from '../../services/api';
+import { fetchPrivateObjectUrl, getFileUrl, privateUploadKind } from '../../services/api';
 
 const GAP_MM = 6;
 
@@ -22,10 +22,42 @@ export default function CardWrapper({
 }) {
   const qrRef = useRef(null);
   const [qrDataUrl, setQrDataUrl] = useState(null);
+  const [privateProfileUrl, setPrivateProfileUrl] = useState(null);
+
+  useEffect(() => {
+    const source = data?.profileImageUrl;
+    if (!source || String(source).startsWith('data:') || !privateUploadKind(source)) {
+      setPrivateProfileUrl(null);
+      return undefined;
+    }
+    let cancelled = false;
+    let objectUrl = null;
+    fetchPrivateObjectUrl(source)
+      .then((url) => {
+        if (cancelled) {
+          if (url) window.URL.revokeObjectURL(url);
+          return;
+        }
+        objectUrl = url;
+        setPrivateProfileUrl(url);
+      })
+      .catch(() => {
+        if (!cancelled) setPrivateProfileUrl(null);
+      });
+    return () => {
+      cancelled = true;
+      if (objectUrl) window.URL.revokeObjectURL(objectUrl);
+    };
+  }, [data?.profileImageUrl]);
 
   const merged = useMemo(() => {
     const base = { ...defaultCardData, ...data };
-    if (base.profileImageUrl && !String(base.profileImageUrl).startsWith('data:')) {
+    if (
+      base.profileImageUrl
+      && !String(base.profileImageUrl).startsWith('data:')
+      && !String(base.profileImageUrl).startsWith('blob:')
+      && !privateUploadKind(base.profileImageUrl)
+    ) {
       base.profileImageUrl = getFileUrl(base.profileImageUrl);
     }
     // Logo lives in Vite public/ — only resolve API upload paths
@@ -64,6 +96,9 @@ export default function CardWrapper({
 
   const cardData = {
     ...merged,
+    profileImageUrl: privateUploadKind(data?.profileImageUrl)
+      ? privateProfileUrl
+      : merged.profileImageUrl,
     qrDataUrl: merged.qrDataUrl || qrDataUrl,
     verifyUrl,
   };
